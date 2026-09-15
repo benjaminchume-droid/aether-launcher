@@ -12,6 +12,9 @@
         <service android:name=".system.AetherOverlayService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Aether persistent interaction and security overlay" />
         </service>
+        <service android:name=".system.AetherNotificationListener" android:label="Aether Notifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
+            <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
+        </service>
         <service android:name=".system.AetherAccessibilityService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="false">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_config"/>
