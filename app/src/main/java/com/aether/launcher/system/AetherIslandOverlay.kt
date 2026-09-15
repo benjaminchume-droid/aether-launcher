@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -22,6 +23,7 @@ import com.aether.launcher.engine.island.ActivityType
 import com.aether.launcher.engine.island.IslandActivity
 import com.aether.launcher.settings.AetherSettingsStore
 import kotlin.math.max
+import kotlin.math.min
 
 class AetherIslandOverlay(private val service: AetherOverlayService) {
     private val wm = service.getSystemService(WindowManager::class.java)
@@ -31,9 +33,9 @@ class AetherIslandOverlay(private val service: AetherOverlayService) {
     private var targetWidth = 0
     private var targetHeight = 0
     private var expanded = false
-
+    private var boundsAnimator: ValueAnimator? = null
     private val density get() = service.resources.displayMetrics.density
-    private fun dp(value: Int) = (value * density).toInt()
+    private fun dp(v: Int) = (v * density).toInt()
 
     fun show() {
         if (view != null || !Settings.canDrawOverlays(service)) return
@@ -56,35 +58,34 @@ class AetherIslandOverlay(private val service: AetherOverlayService) {
             targetWidth = p.width
             targetHeight = p.height
             island.setOnClickListener { toggleExpanded() }
-            island.scaleX = .84f
-            island.scaleY = .84f
-            SpringAnimation(island, DynamicAnimation.SCALE_X).apply {
-                spring = spring(1f, 620f)
-                start()
-            }
-            SpringAnimation(island, DynamicAnimation.SCALE_Y).apply {
-                spring = spring(1f, 620f)
-                start()
-            }
+            island.scaleX = .82f
+            island.scaleY = .82f
+            SpringAnimation(island, DynamicAnimation.SCALE_X).apply { spring = spring(1f, 680f); start() }
+            SpringAnimation(island, DynamicAnimation.SCALE_Y).apply { spring = spring(1f, 680f); start() }
             refresh()
         }
     }
 
-    private fun spring(end: Float, stiffness: Float): SpringForce =
-        SpringForce(end).apply { this.stiffness = stiffness; dampingRatio = .76f }
+    private fun spring(end: Float, stiffness: Float) = SpringForce(end).apply {
+        this.stiffness = stiffness
+        dampingRatio = .74f
+    }
 
     private fun position(p: WindowManager.LayoutParams, offsetDp: Int) {
         if (Build.VERSION.SDK_INT >= 30) {
             val insets = wm.currentWindowMetrics.windowInsets
             val topInset = insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top
             val cutout = insets.displayCutout?.boundingRects?.maxByOrNull { it.width() * it.height() }
-            val cutoutBottom = cutout?.bottom ?: 0
-            p.y = if (cutout != null && store.load().island.cutoutAware) max(topInset, cutoutBottom) + dp(3) else topInset + dp(offsetDp)
-            if (cutout != null && store.load().island.cutoutAware) p.width = max(p.width, cutout.width() + dp(54))
+            if (cutout != null && store.load().island.cutoutAware) {
+                p.y = max(topInset, cutout.bottom) + dp(3)
+                p.width = max(p.width, cutout.width() + dp(54))
+            } else {
+                p.y = topInset + dp(offsetDp)
+            }
         } else {
-            val resourceId = service.resources.getIdentifier("status_bar_height", "dimen", "android")
-            val statusHeight = if (resourceId != 0) service.resources.getDimensionPixelSize(resourceId) else dp(24)
-            p.y = statusHeight + dp(offsetDp)
+            val id = service.resources.getIdentifier("status_bar_height", "dimen", "android")
+            val status = if (id != 0) service.resources.getDimensionPixelSize(id) else dp(24)
+            p.y = status + dp(offsetDp)
         }
     }
 
@@ -94,8 +95,8 @@ class AetherIslandOverlay(private val service: AetherOverlayService) {
         v.activity = activity
         val cfg = store.load().island
         val active = activity.type != ActivityType.NONE && activity.title.isNotBlank()
-        val desiredWidth = if (expanded && active) dp(minOf(360, maxOf(cfg.width + 90, 250))) else dp(cfg.width.coerceAtLeast(86))
-        val desiredHeight = if (expanded && active) dp(maxOf(cfg.height + 44, 76)) else dp(cfg.height.coerceAtLeast(26))
+        val desiredWidth = if (expanded && active) dp(min(380, max(cfg.width + 104, 258))) else dp(cfg.width.coerceAtLeast(86))
+        val desiredHeight = if (expanded && active) dp(max(cfg.height + 54, 82)) else dp(cfg.height.coerceAtLeast(26))
         animateBounds(desiredWidth, desiredHeight)
         v.invalidate()
     }
@@ -104,20 +105,23 @@ class AetherIslandOverlay(private val service: AetherOverlayService) {
         val p = params ?: return
         val v = view ?: return
         if (width == targetWidth && height == targetHeight) return
+        boundsAnimator?.cancel()
         val oldW = targetWidth
         val oldH = targetHeight
         targetWidth = width
         targetHeight = height
-        ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 280L
+        boundsAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 320L
             addUpdateListener { value ->
                 val t = value.animatedValue as Float
-                p.width = (oldW + (width - oldW) * t).toInt()
-                p.height = (oldH + (height - oldH) * t).toInt()
+                val eased = 1f - (1f - t) * (1f - t)
+                p.width = (oldW + (width - oldW) * eased).toInt()
+                p.height = (oldH + (height - oldH) * eased).toInt()
                 runCatching {
                     position(p, store.load().island.topOffset)
                     wm.updateViewLayout(v, p)
                 }
+                v.invalidate()
             }
             start()
         }
@@ -126,9 +130,16 @@ class AetherIslandOverlay(private val service: AetherOverlayService) {
     private fun toggleExpanded() {
         expanded = !expanded
         refresh()
+        view?.let {
+            it.scaleX = if (expanded) .94f else .98f
+            it.scaleY = if (expanded) .94f else .98f
+            SpringAnimation(it, DynamicAnimation.SCALE_X).apply { spring = spring(1f, 520f); start() }
+            SpringAnimation(it, DynamicAnimation.SCALE_Y).apply { spring = spring(1f, 520f); start() }
+        }
     }
 
     fun hide() {
+        boundsAnimator?.cancel()
         view?.let { runCatching { wm.removeView(it) } }
         view = null
         params = null
@@ -143,15 +154,20 @@ private class IslandView(context: android.content.Context) : View(context) {
         val d = resources.displayMetrics.density
         val w = width.toFloat()
         val h = height.toFloat()
-        val radius = h / 2f
+        val expanded = h > 55f * d
+        val radius = min(h / 2f, 28f * d)
 
-        paint.shader = LinearGradient(0f, 0f, 0f, h, 0xF9000000.toInt(), 0xEA14161B.toInt(), Shader.TileMode.CLAMP)
+        paint.shader = LinearGradient(0f, 0f, w, h, intArrayOf(0xF8121418.toInt(), 0xEC060709.toInt(), 0xF51A1D23.toInt()), null, Shader.TileMode.CLAMP)
         c.drawRoundRect(RectF(.5f, .5f, w - .5f, h - .5f), radius, radius, paint)
         paint.shader = null
 
+        // Soft highlight creates depth without copying any source layout literally.
+        paint.shader = RadialGradient(w * .28f, h * .06f, w * .72f, 0x36FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP)
+        c.drawRoundRect(RectF(1f, 1f, w - 1f, h - 1f), radius, radius, paint)
+        paint.shader = null
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = max(1f, d)
-        paint.color = 0x50FFFFFF.toInt()
+        paint.color = 0x4DFFFFFF.toInt()
         c.drawRoundRect(RectF(1f, 1f, w - 1f, h - 1f), radius, radius, paint)
         paint.style = Paint.Style.FILL
 
@@ -165,25 +181,69 @@ private class IslandView(context: android.content.Context) : View(context) {
             ActivityType.NOTIFICATION -> "•"
             ActivityType.NONE -> ""
         }
+        paint.typeface = Typeface.DEFAULT_BOLD
         paint.textAlign = Paint.Align.LEFT
-        paint.typeface = Typeface.DEFAULT_BOLD
-        paint.textSize = if (active) 14f * d else 10f * d
-        paint.color = if (activity.type == ActivityType.RECORDING) 0xFFFF5C5C.toInt() else Color.WHITE
-        if (glyph.isNotEmpty()) c.drawText(glyph, 18f * d, h / 2f + 5f * d, paint)
-
-        paint.typeface = Typeface.DEFAULT_BOLD
-        paint.textSize = if (active) 11f * d else 10f * d
-        paint.color = 0xF2FFFFFF.toInt()
-        val x = if (glyph.isNotEmpty()) 38f * d else w / 2f
-        paint.textAlign = if (glyph.isNotEmpty()) Paint.Align.LEFT else Paint.Align.CENTER
-        c.drawText(if (active) activity.title.take(32) else "AETHER", x, h / 2f + 4f * d, paint)
-
-        if (active && activity.detail.isNotBlank() && h > 55f * d) {
-            paint.typeface = Typeface.DEFAULT
-            paint.textSize = 9f * d
-            paint.color = 0xB8FFFFFF.toInt()
-            paint.textAlign = Paint.Align.LEFT
-            c.drawText(activity.detail.take(44), 38f * d, h / 2f + 22f * d, paint)
+        paint.textSize = if (expanded) 15f * d else 12f * d
+        paint.color = when (activity.type) {
+            ActivityType.RECORDING -> 0xFFFF5D67.toInt()
+            ActivityType.CALL -> 0xFF77E88E.toInt()
+            ActivityType.NAVIGATION -> 0xFF7FC8FF.toInt()
+            else -> Color.WHITE
         }
+        if (glyph.isNotEmpty()) c.drawText(glyph, 16f * d, min(h * .54f, 23f * d), paint)
+
+        val titleX = if (glyph.isNotEmpty()) 38f * d else w / 2f
+        paint.color = 0xF4FFFFFF.toInt()
+        paint.textSize = if (expanded) 12f * d else 10f * d
+        paint.textAlign = if (glyph.isNotEmpty()) Paint.Align.LEFT else Paint.Align.CENTER
+        c.drawText(if (active) activity.title.take(if (expanded) 36 else 24) else "AETHER", titleX, min(h * .54f, 23f * d), paint)
+
+        if (!expanded) return
+
+        paint.typeface = Typeface.DEFAULT
+        paint.textAlign = Paint.Align.LEFT
+        paint.textSize = 9f * d
+        paint.color = 0xBFFFFFFF.toInt()
+        if (activity.detail.isNotBlank()) c.drawText(activity.detail.take(48), 38f * d, 42f * d, paint)
+
+        when (activity.type) {
+            ActivityType.MEDIA -> drawMediaControls(c, d, w, h)
+            ActivityType.CALL -> drawCallControls(c, d, w, h)
+            ActivityType.TIMER -> drawTimer(c, d, w, h)
+            ActivityType.RECORDING -> drawRecording(c, d, w, h)
+            ActivityType.NAVIGATION -> drawNavigation(c, d, w, h)
+            else -> drawNotification(c, d, w, h)
+        }
+    }
+
+    private fun drawMediaControls(c: Canvas, d: Float, w: Float, h: Float) {
+        paint.color = 0x22FFFFFF
+        c.drawRoundRect(RectF(38f*d, 52f*d, w-38f*d, 56f*d), 3f*d, 3f*d, paint)
+        paint.color = Color.WHITE
+        paint.textSize = 18f*d
+        paint.textAlign = Paint.Align.CENTER
+        c.drawText("‹    ❚❚    ›", w/2f, 74f*d, paint)
+    }
+
+    private fun drawCallControls(c: Canvas, d: Float, w: Float, h: Float) {
+        paint.color = 0xFF69E68D.toInt();c.drawCircle(w-44f*d, 20f*d, 6f*d, paint)
+        paint.color = Color.WHITE;paint.textSize=10f*d;paint.textAlign=Paint.Align.RIGHT;c.drawText("Active call",w-56f*d,23f*d,paint)
+    }
+
+    private fun drawTimer(c: Canvas, d: Float, w: Float, h: Float) {
+        paint.color=Color.WHITE;paint.textSize=14f*d;paint.textAlign=Paint.Align.RIGHT;c.drawText("Running",w-18f*d,74f*d,paint)
+    }
+
+    private fun drawRecording(c: Canvas, d: Float, w: Float, h: Float) {
+        paint.color=0xFFFF5D67.toInt();c.drawCircle(48f*d,72f*d,5f*d,paint)
+        paint.color=0xFFFFFFFF.toInt();paint.textSize=10f*d;paint.textAlign=Paint.Align.LEFT;c.drawText("Recording",60f*d,76f*d,paint)
+    }
+
+    private fun drawNavigation(c: Canvas, d: Float, w: Float, h: Float) {
+        paint.color=Color.WHITE;paint.textSize=11f*d;paint.textAlign=Paint.Align.RIGHT;c.drawText("›",w-20f*d,74f*d,paint)
+    }
+
+    private fun drawNotification(c: Canvas, d: Float, w: Float, h: Float) {
+        paint.color=0xBFFFFFFF.toInt();paint.textSize=10f*d;paint.textAlign=Paint.Align.LEFT;c.drawText("Tap to open",38f*d,74f*d,paint)
     }
 }
