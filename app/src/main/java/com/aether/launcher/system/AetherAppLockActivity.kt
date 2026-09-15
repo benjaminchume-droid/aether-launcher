@@ -9,11 +9,9 @@ import androidx.activity.ComponentActivity
 import com.aether.launcher.AetherRuntime
 import com.aether.launcher.ui.AetherGlassRoot
 
-/** Visual policy editor for Aether App Lock. */
 class AetherAppLockActivity : ComponentActivity() {
     private val d get()=resources.displayMetrics.density
     private lateinit var list:LinearLayout
-
     override fun onCreate(state:Bundle?){
         super.onCreate(state);AetherRuntime.initialize(applicationContext)
         val root=AetherGlassRoot(this);val body=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(38),dp(22),dp(24))}
@@ -25,20 +23,7 @@ class AetherAppLockActivity : ComponentActivity() {
         list=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         val scroll=ScrollView(this).apply{isFillViewport=true;addView(list)};body.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));root.addView(body,android.view.ViewGroup.LayoutParams(-1,-1));setContentView(root);render(status)
     }
-
-    private fun render(status:TextView){
-        list.removeAllViews();val apps=AetherRuntime.registry.launcher.apps();val locked=apps.count{AetherRuntime.security.isProtected(it.packageName)}
-        status.text=if(locked==0)"No apps protected yet" else "$locked protected  •  biometric / device credential"
-        apps.forEach{app->
-            val protected=AetherRuntime.security.isProtected(app.packageName)
-            val row=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),dp(7),dp(8),dp(7));background=glass(if(protected)0x824B6E9A else 0x5A101821,22f)}
-            row.addView(ImageView(this).apply{setImageDrawable(AetherRuntime.registry.launcher.icon(app.packageName));setPadding(dp(2),dp(2),dp(2),dp(2))},LinearLayout.LayoutParams(dp(54),dp(54)))
-            row.addView(LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL;addView(TextView(this@AetherAppLockActivity).apply{text=app.label;textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE)});addView(TextView(this@AetherAppLockActivity).apply{text=if(protected)"Protected" else "Tap to protect";textSize=10f;setTextColor(if(protected)0xD0FFFFFF.toInt() else 0x8FFFFFFF.toInt());setPadding(0,dp(3),0,0)})},LinearLayout.LayoutParams(0,dp(54),1f))
-            row.addView(Switch(this).apply{isChecked=protected;setOnCheckedChangeListener{_,checked->if(checked)AetherRuntime.security.protect(app.packageName)else AetherRuntime.security.unprotect(app.packageName);render(status)}},LinearLayout.LayoutParams(dp(58),dp(54)))
-            list.addView(row,LinearLayout.LayoutParams(-1,dp(68)).also{it.bottomMargin=dp(7)})
-        }
-    }
-
-    private fun glass(base:Int,r:Float)=android.graphics.drawable.GradientDrawable().apply{setColor(base);cornerRadius=dp(r.toInt()).toFloat();setStroke(dp(1),0x42FFFFFF)}
+    private fun render(status:TextView){list.removeAllViews();val apps=AetherRuntime.registry.launcher.apps();val locked=apps.count{AetherRuntime.security.isProtected(it.packageName)};status.text=if(locked==0)"No apps protected yet"else"$locked protected  •  biometric / device credential";apps.forEach{app->val protected=AetherRuntime.security.isProtected(app.packageName);val row=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),dp(7),dp(8),dp(7));background=glass(if(protected)0x824B6E9A.toInt()else 0x5A101821,22f)};row.addView(ImageView(this).apply{setImageDrawable(AetherRuntime.registry.launcher.icon(app.packageName));setPadding(dp(2),dp(2),dp(2),dp(2))},LinearLayout.LayoutParams(dp(54),dp(54)));row.addView(LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL;addView(TextView(this@AetherAppLockActivity).apply{text=app.label;textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE)});addView(TextView(this@AetherAppLockActivity).apply{text=if(protected)"Protected"else"Tap to protect";textSize=10f;setTextColor(if(protected)0xD0FFFFFF.toInt()else 0x8FFFFFFF.toInt());setPadding(0,dp(3),0,0)})},LinearLayout.LayoutParams(0,dp(54),1f));row.addView(Switch(this).apply{isChecked=protected;setOnCheckedChangeListener{_,checked->if(checked)AetherRuntime.security.protect(app.packageName)else AetherRuntime.security.unprotect(app.packageName);render(status)}},LinearLayout.LayoutParams(dp(58),dp(54)));list.addView(row,LinearLayout.LayoutParams(-1,dp(68)).also{it.bottomMargin=dp(7)})}}
+    private fun glass(base:Int,r:Float)=android.graphics.drawable.GradientDrawable().apply{setColor(base);cornerRadius=dp(r.toInt()).toFloat();setStroke(dp(1),0x42FFFFFF.toInt())}
     private fun dp(v:Int)=(v*d).toInt()
 }
