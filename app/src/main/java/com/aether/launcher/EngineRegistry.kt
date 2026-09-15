@@ -15,6 +15,7 @@ import com.aether.launcher.engine.persistence.PersistenceEngine
 import com.aether.launcher.engine.physics.PhysicsEngine
 import com.aether.launcher.engine.security.SecurityEngine
 import com.aether.launcher.engine.sensing.AppSensingEngine
+import com.aether.launcher.engine.sensing.StripingSensingEngine
 import com.aether.launcher.engine.system.SystemEngine
 
 class EngineRegistry(context: Context) {
@@ -23,6 +24,7 @@ class EngineRegistry(context: Context) {
     val overlay = OverlayEngine()
     val security = SecurityEngine()
     val sensing = AppSensingEngine()
+    val striping = StripingSensingEngine()
     val island = DynamicIslandEngine()
     val multitasking = MultitaskingEngine()
     val notifications = NotificationEngine()
@@ -33,7 +35,10 @@ class EngineRegistry(context: Context) {
     val audioCapture = AudioCaptureEngine()
     val notes = NotesEngine()
 
-    val engines: List<AetherEngine> = listOf(glass, physics, overlay, security, sensing, island, multitasking, notifications, system, persistence, launcher, controlCenter, audioCapture, notes)
+    val engines: List<AetherEngine> = listOf(
+        glass, physics, overlay, security, sensing, striping, island, multitasking,
+        notifications, system, persistence, launcher, controlCenter, audioCapture, notes
+    )
 
     fun startAll() = engines.forEach { it.start() }
     fun stopAll() = engines.asReversed().forEach { it.stop() }
