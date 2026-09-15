@@ -39,7 +39,7 @@ class AetherToolsActivity : Activity() {
     override fun onCreate(state:Bundle?){super.onCreate(state);when(intent.getStringExtra(EXTRA_TOOL)){"notes"->note();"calculator"->calculator();"clipboard"->clipboard();"voice"->voice();"screenshot"->screenshotConsent();else->finish()}}
     private fun note(){val input=EditText(this).apply{hint="Write a note"};android.app.AlertDialog.Builder(this).setTitle("Aether Note").setView(input).setNegativeButton("Cancel"){_,_->finish()}.setPositiveButton("Save"){_,_->input.text.toString().takeIf{it.isNotBlank()}?.let{AetherRuntime.registry.notes.capture(it)};finish()}.show()}
     private fun calculator(){val input=EditText(this).apply{hint="12 * 8 + 4";inputType=2 or 8192};android.app.AlertDialog.Builder(this).setTitle("Calculator").setView(input).setNegativeButton("Close"){_,_->finish()}.setPositiveButton("Calculate"){_,_->Toast.makeText(this,evaluate(input.text.toString())?:"Invalid expression",Toast.LENGTH_LONG).show()}.show()}
-    private fun clipboard(){val cm=getSystemService(android.content.ClipboardManager::class.java);val text=cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty();setContentView(TextView(this).apply{textSize=18f;setPadding(28,40,28,40);text=if(text.isBlank())"Clipboard is empty" else text})}
+    private fun clipboard(){val cm=getSystemService(android.content.ClipboardManager::class.java);val clipText=cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty();setContentView(TextView(this).apply{ textSize=18f;setPadding(28,40,28,40);this.text=if(clipText.isBlank())"Clipboard is empty" else clipText})}
     private fun voice(){val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(32,48,32,48)};box.addView(TextView(this).apply{text="Voice Recorder";textSize=28f});val start=Button(this).apply{text="Start recording"};val stop=Button(this).apply{text="Stop & save";isEnabled=false};box.addView(start);box.addView(stop);setContentView(box);start.setOnClickListener{if(ContextCompat.checkSelfPermission(this,Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),REQ_MIC);return@setOnClickListener};recordingFile=File(getExternalFilesDir(Environment.DIRECTORY_MUSIC),"aether_${stamp()}.m4a");recorder=MediaRecorder(this).apply{setAudioSource(MediaRecorder.AudioSource.MIC);setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);setAudioEncoder(MediaRecorder.AudioEncoder.AAC);setOutputFile(recordingFile!!.absolutePath);prepare();start()};start.isEnabled=false;stop.isEnabled=true};stop.setOnClickListener{runCatching{recorder?.stop()};runCatching{recorder?.release()};recorder=null;Toast.makeText(this,"Saved ${recordingFile?.name}",Toast.LENGTH_LONG).show();finish()}}
     private fun screenshotConsent(){startActivityForResult(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent(),REQ_CAPTURE)}
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);if(requestCode!=REQ_CAPTURE){return};if(resultCode!=RESULT_OK||data==null){finish();return};runCatching{startCapture(data)}.onFailure{Toast.makeText(this,"Screenshot failed: ${it.message}",Toast.LENGTH_LONG).show();finish()}}
@@ -48,5 +48,15 @@ class AetherToolsActivity : Activity() {
     private fun stopCapture(){runCatching{virtualDisplay?.release()};virtualDisplay=null;runCatching{reader?.close()};reader=null;runCatching{projection?.stop()};projection=null;if(!isFinishing)finish()}
     override fun onDestroy(){runCatching{recorder?.release()};runCatching{virtualDisplay?.release()};runCatching{reader?.close()};runCatching{projection?.stop()};super.onDestroy()}
     private fun stamp()=SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(Date())
-    private fun evaluate(s:String):String?=runCatching{val c=s.replace(" ","");if(!c.matches(Regex("[-+*/.0-9]+")))return null;val t=c.split(Regex("(?=[-+*/])|(?<=[-+*/])")).filter{it.isNotEmpty()};var r=t[0].toDouble();var i=1;while(i+1<t.size){val n=t[i+1].toDouble();r=when(t[i]){"+"->r+n;"-"->r-n;"*"->r*n;"/"->if(n==0.0)return null else r/n;else->return null};i+=2};if(r%1==0.0)r.toLong().toString() else "%.4f".format(r)}.getOrNull()
+    private fun evaluate(s:String):String? {
+        return try {
+            val c=s.replace(" ","")
+            if(!c.matches(Regex("[-+*/.0-9]+"))) return null
+            val t=c.split(Regex("(?=[-+*/])|(?<=[-+*/])")).filter{it.isNotEmpty()}
+            if(t.isEmpty()) return null
+            var r=t[0].toDouble(); var i=1
+            while(i+1<t.size){val n=t[i+1].toDouble();r=when(t[i]){"+"->r+n;"-"->r-n;"*"->r*n;"/"->if(n==0.0)return null else r/n;else->return null};i+=2}
+            if(r%1==0.0) r.toLong().toString() else "%.4f".format(r)
+        } catch(_:Exception){ null }
+    }
 }
