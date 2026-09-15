@@ -11,7 +11,6 @@
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
         </activity>
         <activity android:name=".settings.AetherSettingsActivity" android:exported="false" android:label="Aether Settings" />
-        <activity android:name=".settings.AetherAppLockActivity" android:exported="false" android:label="Aether App Lock" />
         <activity android:name=".system.AetherAppLockActivity" android:exported="false" android:label="Aether App Lock" />
         <activity android:name=".system.NotificationSettingsActivity" android:exported="false" android:label="Aether Notifications" />
         <activity android:name=".ui.AetherSurfaceActivity" android:exported="false" android:label="Aether" />
