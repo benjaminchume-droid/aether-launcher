@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <application android:theme="@style/Theme.Aether" android:label="Aether Launcher" android:allowBackup="false" android:supportsRtl="true">
-        <activity android:name=".AetherActivity" android:exported="true">
+        <activity android:name=".AetherActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
         </activity>
         <activity android:name=".settings.AetherSettingsActivity" android:exported="false" android:label="Aether Settings" />
@@ -34,6 +34,7 @@
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.POWER_CONNECTED"/>
                 <action android:name="android.intent.action.POWER_DISCONNECTED"/>
+                <action android:name="android.intent.action.SCREEN_OFF"/>
             </intent-filter>
         </receiver>
     </application>
