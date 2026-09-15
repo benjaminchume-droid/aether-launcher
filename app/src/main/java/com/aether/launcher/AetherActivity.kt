@@ -10,7 +10,7 @@ import com.aether.launcher.ui.AetherGlassRoot
 class AetherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.enableEdgeToEdge(window)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         AetherRuntime.initialize(applicationContext)
         val store=AetherSettingsStore(this)
         if(store.load().setupComplete){
