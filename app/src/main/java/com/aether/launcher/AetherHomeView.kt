@@ -10,349 +10,174 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
+import android.os.Handler
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
-import androidx.dynamicanimation.animation.DynamicAnimation
-import androidx.dynamicanimation.animation.SpringAnimation
-import androidx.dynamicanimation.animation.SpringForce
 import com.aether.launcher.settings.AetherSettingsStore
 import com.aether.launcher.settings.HomeMode
 import com.aether.launcher.settings.QuickEdge
 import com.aether.launcher.ui.AetherSurface
 import com.aether.launcher.ui.AetherSurfaceActivity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
+/** Primary Aether surface. No fake search field, no package-name UI, and the home order is user-owned. */
 class AetherHomeView(context: Context) : View(context) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val store = AetherSettingsStore(context)
-    private val history = AetherHistoryStore(context)
+    private val layout = AetherHomeLayoutStore(context)
+    private val folders = AetherFolderStore(context)
     private val dock = AetherDockStore(context)
+    private val history = AetherHistoryStore(context)
+    private val handler = Handler(Looper.getMainLooper())
+    private val d get() = resources.displayMetrics.density
     private var cfg = store.load()
-    private val apps get() = AetherRuntime.registry.launcher.apps()
-    private val density get() = resources.displayMetrics.density
+    private var order = mutableListOf<String>()
     private var downX = 0f
     private var downY = 0f
-    private val quickSpring = SpringAnimation(this, DynamicAnimation.TRANSLATION_X)
+    private var dragX = 0f
+    private var dragY = 0f
+    private var dragToken: String? = null
+    private var dragOrigin = -1
+    private var dragTarget = -1
+    private var searchLock = false
 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        quickSpring.spring = SpringForce(0f).apply {
-            stiffness = 620f
-            dampingRatio = 0.82f
-        }
-        scaleX = 0.985f
-        scaleY = 0.985f
-        SpringAnimation(this, DynamicAnimation.SCALE_X).apply {
-            spring = SpringForce(1f).apply { stiffness = 520f; dampingRatio = 0.82f }
-        }.start()
-        SpringAnimation(this, DynamicAnimation.SCALE_Y).apply {
-            spring = SpringForce(1f).apply { stiffness = 520f; dampingRatio = 0.82f }
-        }.start()
+        order = layout.order(AetherRuntime.registry.launcher.apps().map { it.packageName })
+        isClickable = true
     }
 
     override fun onDraw(c: Canvas) {
-        super.onDraw(c)
         cfg = store.load()
-        val w = width.toFloat()
-        val h = height.toFloat()
-        val d = density
-
-        // The wallpaper is painted by AetherGlassRoot underneath this view.
-        // Keep this layer translucent so the wallpaper remains the primary visual.
-        paint.shader = LinearGradient(
-            0f, 0f, 0f, h,
-            0x2A05070B, 0x1405070B,
-            Shader.TileMode.CLAMP
-        )
-        c.drawRect(0f, 0f, w, h, paint)
-        paint.shader = null
-
-        if (cfg.appearance.showTime) {
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-            paint.textSize = 16f * d
-            paint.color = 0xE6FFFFFF.toInt()
-            c.drawText(timeText("HH:mm"), w / 2f, 34f * d, paint)
-        }
-
-        if (cfg.appearance.showAetherLabel) {
-            paint.textSize = 8f * d
-            paint.letterSpacing = 0.30f
-            paint.color = 0xA6FFFFFF.toInt()
-            c.drawText("AETHER", w / 2f, 51f * d, paint)
-            paint.letterSpacing = 0f
-        }
-
-        drawIsland(c, w, d)
-        drawHomeGrid(c, w, h, d)
-        drawDock(c, w, h, d)
-        drawQuickHandle(c, w, h, d)
+        syncOrder()
+        val w = width.toFloat(); val h = height.toFloat()
+        p.shader = LinearGradient(0f, 0f, 0f, h, 0x12030810, 0x08030810, Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, p); p.shader = null
+        drawHeader(c, w)
+        drawIsland(c, w)
+        drawGrid(c, w, h)
+        drawDock(c, w, h)
+        drawEdge(c, w, h)
+        drawDragged(c)
     }
 
-    private fun drawIsland(c: Canvas, w: Float, d: Float) {
+    private fun syncOrder() {
+        val installed = AetherRuntime.registry.launcher.apps().map { it.packageName }
+        if (installed.any { it !in order } || order.none { it in installed }) order = layout.order(installed)
+    }
+
+    private fun drawHeader(c: Canvas, w: Float) {
+        p.textAlign = Paint.Align.LEFT; p.typeface = Typeface.DEFAULT
+        p.color = 0xAFFFFFFF.toInt(); p.textSize = 11f*d
+        c.drawText(SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date()).uppercase(Locale.getDefault()), 24f*d, 40f*d, p)
+        p.color = Color.WHITE; p.typeface = Typeface.DEFAULT_BOLD; p.textSize = 27f*d
+        c.drawText(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), 24f*d, 70f*d, p)
+        p.textAlign = Paint.Align.RIGHT; p.typeface = Typeface.DEFAULT; p.textSize = 9f*d; p.color = 0x9AFFFFFF.toInt()
+        c.drawText("AETHER", w-24f*d, 43f*d, p); p.textSize = 7f*d; p.color = 0x62FFFFFF
+        c.drawText("LIQUID / FLUID / PRIVATE", w-24f*d, 57f*d, p); p.textAlign = Paint.Align.CENTER
+    }
+
+    private fun drawIsland(c: Canvas, w: Float) {
         if (!cfg.island.enabled) return
-        val active = AetherRuntime.registry.island.activity
-        val baseWidth = min(w * 0.46f, cfg.island.width * d)
-        val activeWidth = if (active.title.isNotBlank()) min(w * 0.76f, baseWidth * 1.42f) else baseWidth
-        val height = max(26f * d, cfg.island.height * d)
-        val y = cfg.island.topOffset * d
-        val radius = min(height / 2f, cfg.island.radius * d)
-        val rect = RectF(w / 2f - activeWidth / 2f, y, w / 2f + activeWidth / 2f, y + height)
-
-        drawGlass(c, rect, radius, 0xE0000000.toInt())
-        paint.color = 0x2AFFFFFF
-        c.drawRoundRect(RectF(rect.left + 1f, rect.top + 1f, rect.right - 1f, rect.bottom - 1f), radius, radius, paint)
-
-        // Camera / punch-hole treatment: a darker center gives the capsule a real cutout feel.
-        val cutout = min(22f * d, height * 0.62f)
+        val a = AetherRuntime.registry.island.activity
+        val width = min(w*.56f, cfg.island.width*d * if (a.title.isBlank()) 1f else 1.5f)
+        val height = max(30f*d, cfg.island.height*d); val y = max(7f*d, cfg.island.topOffset*d)
+        val r = RectF(w/2-width/2, y, w/2+width/2, y+height)
+        glass(c, r, height/2f, 0xB914171D.toInt())
         if (cfg.island.cutoutAware) {
-            paint.color = Color.BLACK
-            c.drawRoundRect(
-                RectF(
-                    w / 2f - cutout,
-                    y + (height - cutout * 0.52f) / 2f,
-                    w / 2f + cutout,
-                    y + (height + cutout * 0.52f) / 2f
-                ),
-                cutout,
-                cutout,
-                paint
-            )
+            val cut = min(34f*d, width*.3f); p.color = 0xEE000000.toInt()
+            c.drawRoundRect(RectF(w/2-cut/2, r.top-1f, w/2+cut/2, r.bottom+1f), height/2, height/2, p)
         }
+        if (a.title.isNotBlank()) { p.color=Color.WHITE; p.typeface=Typeface.DEFAULT_BOLD; p.textSize=10f*d; c.drawText(a.title.take(25),w/2,r.centerY()+4f*d,p); p.typeface=Typeface.DEFAULT }
+    }
 
-        if (active.title.isNotBlank()) {
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.DEFAULT_BOLD
-            paint.textSize = 10f * d
-            paint.color = Color.WHITE
-            c.drawText(active.title.take(28), w / 2f, y + height * 0.62f, paint)
-            paint.typeface = Typeface.DEFAULT
+    private fun drawGrid(c: Canvas, w: Float, h: Float) {
+        if (cfg.homeMode == HomeMode.DRAWER_ONLY) return
+        val cols=cfg.grid.columns.coerceIn(4,8); val left=cfg.grid.horizontalPadding*d; val gap=cfg.grid.horizontalSpacing*d
+        val cell=(w-left*2-gap*(cols-1))/cols; val top=112f*d
+        val dockReserve=if(cfg.dock.enabled) cfg.dock.height*d+cfg.dock.bottomPadding*d+18f*d else 8f*d
+        val available=max(200f*d,h-top-dockReserve); val rowGap=cfg.grid.verticalSpacing*d
+        val rows=cfg.grid.rows.coerceIn(4,10); val rowH=max(72f*d,(available-rowGap*(rows-1))/rows)
+        val size=min(cfg.grid.iconSize*d,cell*.66f).coerceIn(34f*d,70f*d)
+        order.take(cols*rows).forEachIndexed { i,token ->
+            if(token==dragToken) return@forEachIndexed
+            val col=i%cols; val row=i/cols; val cx=left+col*(cell+gap)+cell/2f; val y=top+row*(rowH+rowGap)
+            val r=RectF(cx-size/2,y,cx+size/2,y+size)
+            if(token.startsWith("folder:")) folderIcon(c,r,token.removePrefix("folder:")) else icon(c,AetherRuntime.registry.launcher.icon(token),r)
+            if(cfg.grid.showLabels){p.textAlign=Paint.Align.CENTER;p.typeface=Typeface.DEFAULT;p.textSize=10.5f*d;p.color=0xE8FFFFFF.toInt();c.drawText(label(token),cx,r.bottom+17f*d,p)}
         }
     }
 
-    private fun drawHomeGrid(c: Canvas, w: Float, h: Float, d: Float) {
-        val columns = cfg.grid.columns.coerceIn(4, 9)
-        val rows = cfg.grid.rows.coerceIn(4, 9)
-        val shown = when (cfg.homeMode) {
-            HomeMode.ALL_APPS -> apps.take(columns * rows)
-            HomeMode.HOME_AND_DRAWER -> apps.take(columns * min(rows, 3))
-            HomeMode.DRAWER_ONLY -> emptyList()
-        }
-        if (shown.isEmpty()) return
+    private fun dockPackages(): List<String> = (dock.favorites()+order.filterNot { it.startsWith("folder:") }).distinct().take(cfg.dock.appCount.coerceIn(3,8))
 
-        val left = cfg.grid.horizontalPadding * d
-        val right = cfg.grid.horizontalPadding * d
-        val horizontalGap = cfg.grid.horizontalSpacing * d
-        val usableWidth = max(1f, w - left - right - horizontalGap * (columns - 1))
-        val cell = usableWidth / columns
+    private fun drawDock(c: Canvas,w:Float,h:Float){
+        if(!cfg.dock.enabled)return
+        val bottom=h-cfg.dock.bottomPadding*d; val top=bottom-cfg.dock.height*d; val r=RectF(14f*d,top,w-14f*d,bottom)
+        glass(c,r,cfg.dock.radius*d,0xA91A1E26.toInt()); val list=dockPackages(); if(list.isEmpty())return
+        val slot=r.width()/list.size; val size=min(56f*d,r.height()*.68f)
+        list.forEachIndexed{ i,pkg -> val x=r.left+slot*(i+.5f); icon(c,AetherRuntime.registry.launcher.icon(pkg),RectF(x-size/2,r.centerY()-size/2,x+size/2,r.centerY()+size/2)) }
+    }
 
-        val dockReserve = if (cfg.dock.enabled) cfg.dock.height * d + cfg.dock.bottomPadding * d + 34f * d else 18f * d
-        val top = max(78f * d, 92f * d + cfg.grid.verticalPadding * d)
-        val availableHeight = max(1f, h - top - dockReserve)
-        val verticalGap = cfg.grid.verticalSpacing * d
-        val rowCell = max(1f, (availableHeight - verticalGap * (rows - 1)) / rows)
-        val icon = min(
-            min(cfg.grid.iconSize * d, cell * 0.70f),
-            rowCell * 0.66f
-        ).coerceAtLeast(22f * d)
+    private fun drawEdge(c:Canvas,w:Float,h:Float){if(!cfg.quickSpace.enabled)return;val x=if(cfg.quickSpace.edge==QuickEdge.RIGHT)w-5f*d else 5f*d;p.color=0xDFFFFFFF.toInt();c.drawRoundRect(RectF(x-2f*d,h*.46f,x+2f*d,h*.55f),3f*d,3f*d,p)}
 
-        shown.forEachIndexed { index, app ->
-            val col = index % columns
-            val row = index / columns
-            if (row >= rows) return@forEachIndexed
-            val x = left + col * (cell + horizontalGap)
-            val y = top + row * (rowCell + verticalGap)
-            val cx = x + cell / 2f
-            val iconTop = y + max(2f * d, (rowCell - icon) * 0.18f)
-            val iconRect = RectF(cx - icon / 2f, iconTop, cx + icon / 2f, iconTop + icon)
-            drawIcon(c, AetherRuntime.registry.launcher.icon(app.packageName), iconRect)
+    private fun glass(c:Canvas,r:RectF,rad:Float,base:Int){
+        p.color=base;p.setShadowLayer(22f*d,0f,9f*d,0x70000000);c.drawRoundRect(r,rad,rad,p);p.clearShadowLayer()
+        p.shader=LinearGradient(0f,r.top,0f,r.bottom,0x4AFFFFFF,0x0CFFFFFF,Shader.TileMode.CLAMP);c.drawRoundRect(RectF(r.left+1,r.top+1,r.right-1,r.bottom-1),rad,rad,p);p.shader=null
+        p.style=Paint.Style.STROKE;p.strokeWidth=max(1f,d);p.color=0x5CFFFFFF.toInt();c.drawRoundRect(RectF(r.left+1,r.top+1,r.right-1,r.bottom-1),rad,rad,p);p.style=Paint.Style.FILL
+        p.shader=LinearGradient(0f,r.top,0f,r.top+r.height()*.25f,0x35FFFFFF,0x00FFFFFF,Shader.TileMode.CLAMP);c.drawRoundRect(r,rad,rad,p);p.shader=null
+    }
 
-            if (cfg.grid.showLabels) {
-                paint.textAlign = Paint.Align.CENTER
-                paint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-                paint.textSize = min(cfg.grid.labelSize * d, max(8f * d, rowCell * 0.12f))
-                paint.color = 0xE6FFFFFF.toInt()
-                c.drawText(app.label.take(12), cx, iconRect.bottom + min(18f * d, rowCell * 0.20f), paint)
+    private fun icon(c:Canvas,dr:Drawable?,r:RectF){dr?:return;dr.setBounds(r.left.toInt(),r.top.toInt(),r.right.toInt(),r.bottom.toInt());dr.draw(c)}
+    private fun folderIcon(c:Canvas,r:RectF,id:String){glass(c,r,r.width()*.25f,0xB91D222A.toInt());val pkgs=folders.load().firstOrNull{it.id==id}?.packages.orEmpty().take(4);val s=r.width()*.30f;pkgs.forEachIndexed{i,pkg->{val x=r.left+r.width()*.18f+(i%2)*(s+r.width()*.12f);val y=r.top+r.height()*.18f+(i/2)*(s+r.height()*.12f);icon(c,AetherRuntime.registry.launcher.icon(pkg),RectF(x,y,x+s,y+s))}}
+    private fun label(token:String)=if(token.startsWith("folder:"))folders.load().firstOrNull{it.id==token.removePrefix("folder:")}?.name?:"Folder" else AetherRuntime.registry.launcher.apps().firstOrNull{it.packageName==token}?.label?:"App"
+
+    override fun onTouchEvent(e:MotionEvent):Boolean{
+        when(e.actionMasked){
+            MotionEvent.ACTION_DOWN->{downX=e.x;downY=e.y;dragX=e.x;dragY=e.y;dragOrigin=hit(e.x,e.y);dragTarget=dragOrigin;if(dragOrigin>=0)handler.postDelayed({if(abs(dragX-downX)<16f*d&&abs(dragY-downY)<16f*d){dragToken=order.getOrNull(dragOrigin);invalidate()}},430)}
+            MotionEvent.ACTION_MOVE->{dragX=e.x;dragY=e.y;if(dragToken!=null){dragTarget=hit(e.x,e.y);invalidate()}}
+            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{
+                handler.removeCallbacksAndMessages(null);val dx=e.x-downX;val dy=e.y-downY
+                if(dragToken!=null){finishDrag();return true}
+                if(cfg.quickSpace.enabled&&abs(dx)>cfg.quickSpace.triggerDistance*d&&((cfg.quickSpace.edge==QuickEdge.RIGHT&&downX>width-110f*d)||(cfg.quickSpace.edge==QuickEdge.LEFT&&downX<110f*d))){open(AetherSurface.QUICK);return true}
+                if(dy>95f*d&&downY<height*.55f&&!searchLock){searchLock=true;context.startActivity(Intent(context,AetherSearchActivity::class.java));postDelayed({searchLock=false},450);return true}
+                if(dy< -95f*d&&cfg.homeMode!=HomeMode.ALL_APPS){open(AetherSurface.DRAWER);return true}
+                if(abs(dx)<22f*d&&abs(dy)<22f*d&&dragOrigin>=0){launch(order.getOrNull(dragOrigin));return true}
             }
+        };return true
+    }
+
+    private fun finishDrag(){
+        val token=dragToken?:return;val target=dragTarget
+        if(target>=0&&target<order.size&&target!=dragOrigin){
+            val other=order[target]
+            if(!token.startsWith("folder:")&&!other.startsWith("folder:")&&other!=token){merge(token,other)}
+            else {order.remove(token);order.add(target.coerceIn(0,order.size),token);layout.save(order)}
         }
+        dragToken=null;dragOrigin=-1;dragTarget=-1;invalidate()
     }
 
-    private fun drawDock(c: Canvas, w: Float, h: Float, d: Float) {
-        if (!cfg.dock.enabled) return
-        val dockHeight = cfg.dock.height * d
-        val bottom = h - cfg.dock.bottomPadding * d
-        val top = bottom - dockHeight
-        val rect = RectF(w * 0.045f, top, w * 0.955f, bottom)
-        drawGlass(c, rect, cfg.dock.radius * d, 0xBE15191F.toInt())
-
-        val favoriteApps = dock.favorites()
-            .mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
-            .distinctBy { it.packageName }
-        val chosen = (favoriteApps + apps.filterNot { app -> favoriteApps.any { it.packageName == app.packageName } })
-            .take(cfg.dock.appCount.coerceIn(3, 8))
-        if (chosen.isEmpty()) return
-
-        val count = chosen.size
-        val slot = rect.width() / count
-        val iconSize = min(54f * d, dockHeight * 0.64f)
-        chosen.forEachIndexed { index, app ->
-            val centerX = rect.left + slot * (index + 0.5f)
-            val r = RectF(
-                centerX - iconSize / 2f,
-                top + (dockHeight - iconSize) / 2f,
-                centerX + iconSize / 2f,
-                top + (dockHeight + iconSize) / 2f
-            )
-            drawIcon(c, AetherRuntime.registry.launcher.icon(app.packageName), r)
-        }
+    private fun merge(a:String,b:String){
+        val existing=folders.load().firstOrNull{a in it.packages||b in it.packages};val id=existing?.id?:UUID.randomUUID().toString()
+        val pkgs=(existing?.packages.orEmpty()+a+b).distinct();val name=existing?.name?:"${label(a)} & ${label(b)}";folders.save(AetherFolder(id,name,pkgs))
+        val pos=minOf(order.indexOf(a),order.indexOf(b)).coerceAtLeast(0);order.removeAll{it==a||it==b};order.add(pos.coerceAtMost(order.size),"folder:$id");layout.save(order)
     }
 
-    private fun drawQuickHandle(c: Canvas, w: Float, h: Float, d: Float) {
-        if (!cfg.quickSpace.enabled) return
-        val thickness = cfg.quickSpace.handleThickness * d
-        val length = cfg.quickSpace.handleLength * d
-        val centerY = h * 0.52f
-        val right = cfg.quickSpace.edge == QuickEdge.RIGHT
-        val rect = if (right) {
-            RectF(w - 6f * d - thickness, centerY - length / 2f, w - 6f * d, centerY + length / 2f)
-        } else {
-            RectF(6f * d, centerY - length / 2f, 6f * d + thickness, centerY + length / 2f)
-        }
-        paint.color = 0xDFFFFFFF.toInt()
-        c.drawRoundRect(rect, thickness, thickness, paint)
-        paint.color = 0x35FFFFFF
-        c.drawRoundRect(RectF(rect.left, rect.top, rect.right, rect.top + rect.height() * 0.42f), thickness, thickness, paint)
+    private fun hit(x:Float,y:Float):Int{
+        if(cfg.homeMode==HomeMode.DRAWER_ONLY||y<104f*d)return -1
+        val cols=cfg.grid.columns.coerceIn(4,8);val left=cfg.grid.horizontalPadding*d;val gap=cfg.grid.horizontalSpacing*d;val cell=(width-left*2-gap*(cols-1))/cols;val top=112f*d
+        val dockReserve=if(cfg.dock.enabled)cfg.dock.height*d+cfg.dock.bottomPadding*d+18f*d else 8f*d;val available=max(200f*d,height-top-dockReserve);val rows=cfg.grid.rows.coerceIn(4,10);val rowGap=cfg.grid.verticalSpacing*d;val rowH=max(72f*d,(available-rowGap*(rows-1))/rows)
+        val col=((x-left)/(cell+gap)).toInt();val row=((y-top)/(rowH+rowGap)).toInt();if(col !in 0 until cols||row !in 0 until rows)return -1;val i=row*cols+col;return if(i in order.indices)i else -1
     }
 
-    private fun drawGlass(c: Canvas, rect: RectF, radius: Float, base: Int) {
-        paint.shader = null
-        paint.setShadowLayer(cfg.glass.depth * density, 0f, 5f * density, 0x76000000)
-        paint.color = base
-        c.drawRoundRect(rect, radius, radius, paint)
-        paint.clearShadowLayer()
+    private fun launch(token:String?){if(token.isNullOrBlank())return;if(token.startsWith("folder:")){open(AetherSurface.FOLDER,token.removePrefix("folder:"));return};history.record(token);AetherRuntime.registry.launcher.launchIntent(token)?.let{context.startActivity(it)}}
+    private fun open(surface:String,folderId:String?=null){context.startActivity(Intent(context,AetherSurfaceActivity::class.java).apply{putExtra("surface",surface);folderId?.let{putExtra("folder_id",it)}})}
 
-        paint.shader = LinearGradient(
-            0f,
-            rect.top,
-            0f,
-            rect.bottom,
-            0x38FFFFFF,
-            0x10FFFFFF,
-            Shader.TileMode.CLAMP
-        )
-        c.drawRoundRect(RectF(rect.left + 0.7f, rect.top + 0.7f, rect.right - 0.7f, rect.bottom - 0.7f), radius, radius, paint)
-        paint.shader = null
-
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = max(1f, density)
-        paint.color = 0x48FFFFFF.toInt()
-        c.drawRoundRect(RectF(rect.left + 1f, rect.top + 1f, rect.right - 1f, rect.bottom - 1f), radius, radius, paint)
-        paint.style = Paint.Style.FILL
-
-        paint.shader = LinearGradient(
-            0f,
-            rect.top,
-            0f,
-            rect.top + rect.height() * 0.22f,
-            0x36FFFFFF,
-            0x00FFFFFF,
-            Shader.TileMode.CLAMP
-        )
-        c.drawRoundRect(rect, radius, radius, paint)
-        paint.shader = null
-    }
-
-    private fun drawIcon(c: Canvas, icon: Drawable?, r: RectF) {
-        icon ?: return
-        icon.setBounds(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
-        icon.draw(c)
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                downX = event.x
-                downY = event.y
-                return true
-            }
-
-            MotionEvent.ACTION_UP -> {
-                val dx = event.x - downX
-                val dy = event.y - downY
-                val d = density
-
-                if (cfg.quickSpace.enabled &&
-                    abs(dx) > cfg.quickSpace.triggerDistance * d &&
-                    ((cfg.quickSpace.edge == QuickEdge.RIGHT && downX > width - 110f * d) ||
-                        (cfg.quickSpace.edge == QuickEdge.LEFT && downX < 110f * d))
-                ) {
-                    quickSpring.animateToFinalPosition(if (cfg.quickSpace.edge == QuickEdge.RIGHT) -22f * d else 22f * d)
-                    start(AetherSurface.QUICK)
-                    return true
-                }
-
-                if (abs(dy) > 90f * d && dy < 0f && downY > 80f * d) {
-                    start(AetherSurface.DRAWER)
-                    return true
-                }
-                if (abs(dy) > 90f * d && dy > 0f && downY < height * 0.48f) {
-                    start(AetherSurface.WIDGETS)
-                    return true
-                }
-                if (downY > height * 0.79f && abs(dx) < 30f * d && abs(dy) < 30f * d) {
-                    start(AetherSurface.MULTITASK)
-                    return true
-                }
-                if (abs(dx) < 30f * d && abs(dy) < 30f * d) {
-                    launchApp(event.x, event.y)
-                    return true
-                }
-                return true
-            }
-        }
-        return true
-    }
-
-    private fun launchApp(x: Float, y: Float) {
-        val d = density
-        val columns = cfg.grid.columns.coerceIn(4, 9)
-        val rows = cfg.grid.rows.coerceIn(4, 9)
-        val shown = when (cfg.homeMode) {
-            HomeMode.ALL_APPS -> apps.take(columns * rows)
-            HomeMode.HOME_AND_DRAWER -> apps.take(columns * min(rows, 3))
-            HomeMode.DRAWER_ONLY -> emptyList()
-        }
-        if (shown.isEmpty()) return
-
-        val left = cfg.grid.horizontalPadding * d
-        val horizontalGap = cfg.grid.horizontalSpacing * d
-        val cell = (width - left * 2f - horizontalGap * (columns - 1)) / columns
-        val dockReserve = if (cfg.dock.enabled) cfg.dock.height * d + cfg.dock.bottomPadding * d + 34f * d else 18f * d
-        val top = max(78f * d, 92f * d + cfg.grid.verticalPadding * d)
-        val available = max(1f, height - top - dockReserve)
-        val verticalGap = cfg.grid.verticalSpacing * d
-        val rowCell = max(1f, (available - verticalGap * (rows - 1)) / rows)
-        val col = ((x - left) / (cell + horizontalGap)).toInt()
-        val row = ((y - top) / (rowCell + verticalGap)).toInt()
-        val index = row * columns + col
-
-        if (col in 0 until columns && row in 0 until rows && index in shown.indices) {
-            history.record(shown[index].packageName)
-            AetherRuntime.registry.launcher.launchIntent(shown[index].packageName)?.let { intent ->
-                context.startActivity(intent)
-            }
-        }
-    }
-
-    private fun start(surface: String) {
-        context.startActivity(
-            Intent(context, AetherSurfaceActivity::class.java)
-                .putExtra("surface", surface)
-        )
-    }
-
-    private fun timeText(pattern: String): String =
-        java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).format(java.util.Date())
+    private fun drawDragged(c:Canvas){val token=dragToken?:return;val size=70f*d;val r=RectF(dragX-size/2,dragY-size/2,dragX+size/2,dragY+size/2);glass(c,r,23f*d,0xD1222730.toInt());if(token.startsWith("folder:"))folderIcon(c,RectF(r.left+6,r.top+6,r.right-6,r.bottom-6),token.removePrefix("folder:"))else icon(c,AetherRuntime.registry.launcher.icon(token),RectF(r.left+7,r.top+7,r.right-7,r.bottom-7))}
 }
