@@ -4,16 +4,17 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import com.aether.launcher.settings.AetherSettingsStore
 import com.aether.launcher.settings.AetherSetupView
+import com.aether.launcher.ui.AetherGlassRoot
 
 class AetherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AetherRuntime.initialize(applicationContext)
-        val store = AetherSettingsStore(this)
-        if (store.load().setupComplete) {
-            setContentView(AetherHomeView(this))
-        } else {
-            setContentView(AetherSetupView(this) { setContentView(AetherHomeView(this)) })
+        val store=AetherSettingsStore(this)
+        if(store.load().setupComplete){
+            val glass=AetherGlassRoot(this);glass.attach(AetherHomeView(this));setContentView(glass)
+        }else{
+            setContentView(AetherSetupView(this){val glass=AetherGlassRoot(this);glass.attach(AetherHomeView(this));setContentView(glass)})
         }
     }
 }
