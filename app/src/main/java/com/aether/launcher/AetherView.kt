@@ -11,7 +11,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
 import android.widget.Toast
-import com.aether.launcher.engine.notes.Note
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -83,8 +82,7 @@ class AetherView(context: Context) : View(context) {
                 val dx=e.x-downX; val dy=e.y-downY
                 if(downX>width-90 && abs(dx)>40){ quickOpen=dx<0; quick=if(quickOpen)1f else 0f; invalidate(); return true }
                 if(quickOpen && downY>height*.62f && downY<height*.76f) {
-                    val slot=(e.x/(width/4f)).toInt()
-                    when(slot) {
+                    when((e.x/(width/4f)).toInt()) {
                         0 -> showNote()
                         1 -> Toast.makeText(context,"Voice capture is next: microphone permission will be requested.",Toast.LENGTH_SHORT).show()
                         2 -> showCalculator()
@@ -109,7 +107,7 @@ class AetherView(context: Context) : View(context) {
         android.app.AlertDialog.Builder(context).setTitle("Aether Note").setView(input)
             .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
                 val text=input.text.toString().trim(); if(text.isNotEmpty()) {
-                    AetherRuntime.registry.notes.capture(Note(System.currentTimeMillis().toString(), text, System.currentTimeMillis()))
+                    AetherRuntime.registry.notes.capture(text)
                     Toast.makeText(context,"Note saved",Toast.LENGTH_SHORT).show()
                 }
             }.show()
@@ -119,14 +117,13 @@ class AetherView(context: Context) : View(context) {
         val input = EditText(context); input.hint = "e.g. 12 * 8 + 4"; input.inputType=2 or 8192
         android.app.AlertDialog.Builder(context).setTitle("Aether Calculator").setView(input)
             .setNegativeButton("Close", null).setPositiveButton("Calculate") { _, _ ->
-                val result = evaluate(input.text.toString())
-                Toast.makeText(context, result ?: "Invalid expression", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, evaluate(input.text.toString()) ?: "Invalid expression", Toast.LENGTH_SHORT).show()
             }.show()
     }
 
     private fun evaluate(s: String): String? = try {
         val cleaned=s.replace(" ",""); if(!cleaned.matches(Regex("[-+*/.0-9]+"))) return null
-        val values=cleaned.split(Regex("(?=[-+*/])|(?<=[-+*/])")).filter{it.isNotEmpty()}.toMutableList()
+        val values=cleaned.split(Regex("(?=[-+*/])|(?<=[-+*/])")).filter{it.isNotEmpty()}
         if(values.isEmpty()) return null
         var total=values[0].toDouble(); var i=1
         while(i+1<values.size){ val op=values[i]; val n=values[i+1].toDouble(); total=when(op){"+"->total+n;"-"->total-n;"*"->total*n;"/"->if(n==0.0)return null else total/n;else->return null}; i+=2 }
