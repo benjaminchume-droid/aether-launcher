@@ -10,6 +10,8 @@ import android.os.IBinder
 import com.aether.launcher.AetherRuntime
 
 class AetherOverlayService : Service() {
+    private var islandOverlay: AetherIslandOverlay? = null
+
     override fun onCreate() {
         super.onCreate()
         val channelId = "aether_core"
@@ -25,11 +27,22 @@ class AetherOverlayService : Service() {
             .setOngoing(true)
             .build()
         startForeground(1001, notification)
-        if (!safeRuntimeReady) {
-            try { AetherRuntime.initialize(applicationContext); safeRuntimeReady = true } catch (_: Throwable) { }
+        runCatching {
+            AetherRuntime.initialize(applicationContext)
+            islandOverlay = AetherIslandOverlay(this).also { it.show() }
         }
     }
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        runCatching { islandOverlay?.refresh() }
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        islandOverlay?.hide()
+        islandOverlay = null
+        super.onDestroy()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
-    companion object { private var safeRuntimeReady = false }
 }
