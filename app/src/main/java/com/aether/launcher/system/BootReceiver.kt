@@ -16,17 +16,14 @@ class BootReceiver : BroadcastReceiver() {
                 ContextCompat.startForegroundService(context, Intent(context, AetherOverlayService::class.java))
                 AetherRuntime.initialize(context.applicationContext)
                 val battery = context.getSystemService(BatteryManager::class.java)
-                if (battery?.isCharging == true) {
-                    AetherRuntime.registry.island.setActivity(IslandActivity(ActivityType.CHARGING, "Charging", "Power connected", 4, "power"))
-                }
+                if (battery?.isCharging == true) AetherRuntime.registry.island.setActivity(IslandActivity(ActivityType.CHARGING, "Charging", "Power connected", 4, "power"))
             }
             Intent.ACTION_POWER_CONNECTED -> {
                 AetherRuntime.initialize(context.applicationContext)
                 AetherRuntime.registry.island.setActivity(IslandActivity(ActivityType.CHARGING, "Charging", "Power connected", 4, "power"))
             }
-            Intent.ACTION_POWER_DISCONNECTED -> {
-                if (AetherRuntime.isInitialized()) AetherRuntime.registry.island.clearActivity("power")
-            }
+            Intent.ACTION_POWER_DISCONNECTED -> if (AetherRuntime.isInitialized()) AetherRuntime.registry.island.clearActivity("power")
+            Intent.ACTION_SCREEN_OFF -> if (AetherRuntime.isInitialized()) AetherRuntime.security.lockAll()
         }
     }
 }
