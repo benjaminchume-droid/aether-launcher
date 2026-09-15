@@ -10,12 +10,12 @@ android {
     namespace = "com.aether.launcher"
     compileSdk = 35
     defaultConfig {
-        // Keep the existing package id stable so updates install over the current Aether build.
+        // IMPORTANT: keep this exact application id. Changing it would create a different app.
         applicationId = "com.aetherlaucher.glassline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.4.0"
+        versionCode = 6
+        versionName = "0.5.0"
     }
     signingConfigs {
         create("release") {
@@ -31,7 +31,7 @@ android {
         getByName("debug") { isMinifyEnabled = false }
         getByName("release") {
             isMinifyEnabled = false
-            check(releaseSigningReady) { "Aether release signing is not configured. Provide AETHER_KEYSTORE_BASE64 plus AETHER_KEYSTORE_PASSWORD, AETHER_KEY_ALIAS and AETHER_KEY_PASSWORD to the workflow." }
+            check(releaseSigningReady) { "Aether release signing is not configured. Provide the stable AETHER_KEYSTORE_BASE64 plus AETHER_KEYSTORE_PASSWORD, AETHER_KEY_ALIAS and AETHER_KEY_PASSWORD workflow values." }
             signingConfig = signingConfigs.getByName("release")
         }
     }
