@@ -12,6 +12,7 @@
         </activity>
         <activity android:name=".settings.AetherSettingsActivity" android:exported="false" android:label="Aether Settings" />
         <activity android:name=".ui.AetherSurfaceActivity" android:exported="false" android:label="Aether" />
+        <activity android:name=".ui.AetherSearchActivity" android:exported="false" android:label="Aether Search" />
         <activity android:name=".ui.AetherWidgetHostActivity" android:exported="false" android:label="Aether Widgets" />
         <activity android:name=".ui.AetherToolsActivity" android:exported="false" android:label="Aether Tools" />
         <activity android:name=".system.LockActivity" android:exported="false" android:excludeFromRecents="true" android:launchMode="singleTop" />
