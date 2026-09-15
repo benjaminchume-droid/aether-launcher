@@ -4,9 +4,9 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.aether.launcher.AetherRuntime
+import com.aether.launcher.engine.island.ActivityType
+import com.aether.launcher.engine.island.IslandActivity
 import com.aether.launcher.engine.notification.AetherNotification
-import com.aether.launcher.engine.dynamicisland.ActivityType
-import com.aether.launcher.engine.dynamicisland.IslandActivity
 
 /** Optional notification bridge. The user must explicitly grant Notification Access. */
 class AetherNotificationListener : NotificationListenerService() {
@@ -14,9 +14,7 @@ class AetherNotificationListener : NotificationListenerService() {
         AetherRuntime.initialize(applicationContext)
         activeNotifications?.forEach(::ingest)
     }
-
     override fun onNotificationPosted(sbn: StatusBarNotification) = ingest(sbn)
-
     override fun onNotificationRemoved(sbn: StatusBarNotification) = Unit
 
     private fun ingest(sbn: StatusBarNotification) {
@@ -35,7 +33,7 @@ class AetherNotificationListener : NotificationListenerService() {
             else -> ActivityType.NOTIFICATION
         }
         AetherRuntime.registry.island.setActivity(
-            IslandActivity(type, title.ifBlank { applicationInfo.loadLabel(packageManager).toString() }, sbn.postTime)
+            IslandActivity(type, title.ifBlank { "Activity" }, text, 0)
         )
     }
 }
