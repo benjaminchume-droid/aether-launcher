@@ -26,6 +26,7 @@ import com.aether.launcher.AetherFolderStore
 import com.aether.launcher.AetherHistoryStore
 import com.aether.launcher.AetherRuntime
 import com.aether.launcher.engine.launcher.AppInfo
+import com.aether.launcher.settings.AetherSettingsActivity
 import com.aether.launcher.settings.AetherSettingsStore
 import com.aether.launcher.system.AetherSystemActions
 import java.util.UUID
@@ -33,551 +34,54 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-object AetherSurface {
-    const val DRAWER = "drawer"
-    const val HISTORY = "history"
-    const val QUICK = "quick"
-    const val CONTROL = "control"
-    const val NOTIFICATIONS = "notifications"
-    const val WIDGETS = "widgets"
-    const val FOLDER = "folder"
-    const val MULTITASK = "multitask"
-    const val SETUP_CENTER = "setup_center"
-    const val ABOUT = "about"
-}
+object AetherSurface { const val DRAWER="drawer"; const val HISTORY="history"; const val QUICK="quick"; const val CONTROL="control"; const val NOTIFICATIONS="notifications"; const val WIDGETS="widgets"; const val FOLDER="folder"; const val MULTITASK="multitask"; const val SETUP_CENTER="setup_center"; const val ABOUT="about" }
 
 class AetherSurfaceActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         AetherRuntime.initialize(applicationContext)
         val root = AetherGlassRoot(this)
-        root.attach(
-            AetherSurfaceView(
-                this,
-                intent.getStringExtra("surface") ?: AetherSurface.DRAWER,
-                intent.getStringExtra("title"),
-                intent.getStringExtra("folder_id")
-            )
-        )
+        root.attach(AetherSurfaceView(this, intent.getStringExtra("surface") ?: AetherSurface.DRAWER, intent.getStringExtra("title"), intent.getStringExtra("folder_id")))
         setContentView(root)
     }
 }
 
-class AetherSurfaceView(
-    c: Context,
-    private val surface: String,
-    private val folderTitle: String?,
-    private val folderId: String?
-) : View(c) {
+class AetherSurfaceView(c: Context, private val surface: String, private val folderTitle: String?, private val folderId: String?) : View(c) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val d get() = resources.displayMetrics.density
-    private var downX = 0f
-    private var downY = 0f
+    private var downX=0f; private var downY=0f
     private val launcher get() = AetherRuntime.registry.launcher
     private val apps get() = launcher.apps()
-    private val history = AetherHistoryStore(c)
-    private val dock = AetherDockStore(c)
-    private val folders = AetherFolderStore(c)
-    private val cfg = AetherSettingsStore(c)
-
-    init {
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        translationY = 18f * d
-        alpha = 0.98f
-        SpringAnimation(this, DynamicAnimation.TRANSLATION_Y).apply {
-            spring = SpringForce(0f).apply { stiffness = 520f; dampingRatio = 0.82f }
-        }.start()
-    }
-
-    override fun onDraw(c: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-
-        // Root provides the real blurred wallpaper. This layer only adds a subtle depth veil.
-        p.shader = LinearGradient(0f, 0f, 0f, h, 0x1905090D, 0x0805090D, Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, p)
-        p.shader = null
-
-        when (surface) {
-            AetherSurface.CONTROL -> control(c, w, h)
-            AetherSurface.QUICK -> quick(c, w, h)
-            AetherSurface.DRAWER -> drawer(c, w, h)
-            AetherSurface.HISTORY -> historySurface(c, w, h)
-            AetherSurface.NOTIFICATIONS -> notifications(c, w, h)
-            AetherSurface.WIDGETS -> widgets(c, w, h)
-            AetherSurface.FOLDER -> folder(c, w, h)
-            AetherSurface.MULTITASK -> multi(c, w, h)
-            AetherSurface.SETUP_CENTER -> setup(c, w, h)
-            else -> about(c, w, h)
-        }
-    }
-
-    private fun header(c: Canvas, title: String, subtitle: String) {
-        val w = width.toFloat()
-        p.textAlign = Paint.Align.LEFT
-        p.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        p.color = 0xECFFFFFF.toInt()
-        p.textSize = 30f * d
-        c.drawText(title, 24f * d, 56f * d, p)
-        p.color = 0xB8FFFFFF.toInt()
-        p.textSize = 12f * d
-        c.drawText(subtitle, 24f * d, 80f * d, p)
-        p.textAlign = Paint.Align.CENTER
-    }
-
-    private fun glass(c: Canvas, r: RectF, rad: Float, base: Int = 0xBE151A22.toInt()) {
-        p.color = base
-        p.setShadowLayer(18f * d, 0f, 8f * d, 0x72000000)
-        c.drawRoundRect(r, rad, rad, p)
-        p.clearShadowLayer()
-
-        p.shader = LinearGradient(
-            0f, r.top, 0f, r.bottom,
-            0x42FFFFFF, 0x10FFFFFF,
-            Shader.TileMode.CLAMP
-        )
-        c.drawRoundRect(RectF(r.left + 1f, r.top + 1f, r.right - 1f, r.bottom - 1f), rad, rad, p)
-        p.shader = null
-
-        p.style = Paint.Style.STROKE
-        p.strokeWidth = max(1f, d)
-        p.color = 0x4AFFFFFF.toInt()
-        c.drawRoundRect(RectF(r.left + 1f, r.top + 1f, r.right - 1f, r.bottom - 1f), rad, rad, p)
-        p.style = Paint.Style.FILL
-
-        p.shader = LinearGradient(
-            0f, r.top, 0f, r.top + r.height() * 0.24f,
-            0x28FFFFFF, 0x00FFFFFF,
-            Shader.TileMode.CLAMP
-        )
-        c.drawRoundRect(r, rad, rad, p)
-        p.shader = null
-    }
-
-    private fun icon(c: Canvas, pkg: String, r: RectF) {
-        launcher.icon(pkg)?.let { d: Drawable ->
-            d.setBounds(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
-            d.draw(c)
-        }
-    }
-
-    private fun tile(c: Canvas, r: RectF, label: String, active: Boolean = false, detail: String? = null) {
-        glass(c, r, min(24f * d, r.height() * 0.32f), if (active) 0xD93A77D9.toInt() else 0xA8151A22.toInt())
-        p.color = Color.WHITE
-        p.textAlign = Paint.Align.LEFT
-        p.textSize = 14f * d
-        p.typeface = Typeface.DEFAULT_BOLD
-        c.drawText(label, r.left + 16f * d, r.top + 27f * d, p)
-        if (!detail.isNullOrBlank()) {
-            p.typeface = Typeface.DEFAULT
-            p.textSize = 9f * d
-            p.color = 0xBFFFFFFF.toInt()
-            c.drawText(detail.take(24), r.left + 16f * d, r.top + 44f * d, p)
-        }
-        p.textAlign = Paint.Align.CENTER
-        p.typeface = Typeface.DEFAULT
-    }
-
-    private fun headerlessStatus(c: Canvas, w: Float) {
-        p.textAlign = Paint.Align.LEFT
-        p.color = 0xE6FFFFFF.toInt()
-        p.textSize = 12f * d
-        c.drawText(java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date()), 28f * d, 40f * d, p)
-        p.textAlign = Paint.Align.RIGHT
-        p.color = 0xDFFFFFFF.toInt()
-        c.drawText("●  ▮  100%", w - 28f * d, 40f * d, p)
-        p.textAlign = Paint.Align.CENTER
-    }
-
-    private fun drawer(c: Canvas, w: Float, h: Float) {
-        header(c, "Apps", "Search, organize and launch your installed apps")
-        glass(c, RectF(22f * d, 96f * d, w - 22f * d, 146f * d), 25f * d, 0xA9121620.toInt())
-        p.color = 0xCCFFFFFF.toInt()
-        p.textAlign = Paint.Align.LEFT
-        p.textSize = 14f * d
-        c.drawText("⌕  Search apps", 40f * d, 127f * d, p)
-        p.textAlign = Paint.Align.CENTER
-        c.drawText("+", w - 48f * d, 128f * d, p)
-
-        val g = cfg.load().grid
-        val cols = g.columns.coerceIn(4, 9)
-        val gap = 10f * d
-        val left = 20f * d
-        val top = 168f * d
-        val cell = (w - left * 2f - gap * (cols - 1)) / cols
-        val rows = ((h - top - 24f * d) / (78f * d)).toInt().coerceAtMost(9)
-        val size = min(g.iconSize * d, cell * 0.62f)
-        apps.take(cols * rows).forEachIndexed { i, a ->
-            val col = i % cols
-            val row = i / cols
-            val x = left + col * (cell + gap)
-            val y = top + row * 78f * d
-            icon(c, a.packageName, RectF(x + cell / 2f - size / 2f, y, x + cell / 2f + size / 2f, y + size))
-            p.color = 0xE6FFFFFF.toInt()
-            p.textAlign = Paint.Align.CENTER
-            p.typeface = Typeface.DEFAULT
-            p.textSize = min(10f * d, cell * 0.16f)
-            c.drawText(a.label.take(11), x + cell / 2f, y + size + 16f * d, p)
-        }
-    }
-
-    private fun historySurface(c: Canvas, w: Float, h: Float) {
-        header(c, "History", "Recently launched • persistent on-device history")
-        glass(c, RectF(w * 0.60f, 94f * d, w - 22f * d, 146f * d), 24f * d)
-        p.color = 0xE6FFFFFF.toInt()
-        p.textSize = 12f * d
-        c.drawText("Clear history", w * 0.78f, 126f * d, p)
-        val list = history.load().mapNotNull { e -> apps.firstOrNull { it.packageName == e.packageName } }.distinctBy { it.packageName }
-        if (list.isEmpty()) {
-            empty(c, w, h, "No launch history yet.")
-        } else {
-            grid(c, w, h, list, 3, 168f * d)
-        }
-    }
-
-    private fun folder(c: Canvas, w: Float, h: Float) {
-        header(c, folderTitle ?: "Folder", "Aether folder")
-        val f = folders.load().firstOrNull { it.id == folderId || it.name == folderTitle }
-        val list = f?.packages?.mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }.orEmpty()
-        if (list.isEmpty()) empty(c, w, h, "This folder is empty.") else grid(c, w, h, list, 3, 118f * d)
-    }
-
-    private fun grid(c: Canvas, w: Float, h: Float, list: List<AppInfo>, cols: Int, top: Float) {
-        val gap = 12f * d
-        val left = 22f * d
-        val cell = (w - left * 2f - gap * (cols - 1)) / cols
-        val size = min(48f * d, cell * 0.52f)
-        list.take(48).forEachIndexed { i, a ->
-            val col = i % cols
-            val row = i / cols
-            val x = left + col * (cell + gap)
-            val y = top + row * 88f * d
-            glass(c, RectF(x, y, x + cell, y + 70f * d), 22f * d)
-            icon(c, a.packageName, RectF(x + cell / 2f - size / 2f, y + 9f * d, x + cell / 2f + size / 2f, y + 9f * d + size))
-            p.color = Color.WHITE
-            p.textAlign = Paint.Align.CENTER
-            p.textSize = 10f * d
-            c.drawText(a.label.take(14), x + cell / 2f, y + 62f * d, p)
-        }
-    }
-
-    private fun quick(c: Canvas, w: Float, h: Float) {
-        headerlessStatus(c, w)
-        p.color = 0xEAFFFFFF.toInt()
-        p.textAlign = Paint.Align.LEFT
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 28f * d
-        c.drawText("Quick Space", 24f * d, 88f * d, p)
-        p.typeface = Typeface.DEFAULT
-        p.color = 0xBFFFFFFF.toInt()
-        p.textSize = 12f * d
-        c.drawText("Tools that expand from the edge", 24f * d, 110f * d, p)
-
-        val items = listOf("Notes", "Voice Recorder", "Calculator", "Screenshot", "Clipboard", "Recent Apps", "Widgets", "Settings")
-        val cols = 2
-        val left = 22f * d
-        val gap = 12f * d
-        val cell = (w - left * 2f - gap) / 2f
-        items.forEachIndexed { i, label ->
-            val col = i % cols
-            val row = i / cols
-            val x = left + col * (cell + gap)
-            val y = 138f * d + row * 72f * d
-            tile(c, RectF(x, y, x + cell, y + 58f * d), label, i == 0)
-        }
-    }
-
-    private fun control(c: Canvas, w: Float, h: Float) {
-        headerlessStatus(c, w)
-
-        // Large modular layout inspired by the provided glass Control Center references.
-        val gap = 12f * d
-        val left = 18f * d
-        val right = w - 18f * d
-        val half = (w - 2f * left - gap) / 2f
-
-        glass(c, RectF(left, 58f * d, left + half, 170f * d), 26f * d, 0xA91A2030.toInt())
-        tile(c, RectF(left + 10f * d, 68f * d, left + half - 10f * d, 112f * d), "Wi-Fi", true, "Connected")
-        tile(c, RectF(left + 10f * d, 120f * d, left + half - 10f * d, 164f * d), "Bluetooth", false, "On")
-
-        glass(c, RectF(left + half + gap, 58f * d, right, 170f * d), 26f * d, 0x9D17202A.toInt())
-        p.textAlign = Paint.Align.LEFT
-        p.color = 0xE8FFFFFF.toInt()
-        p.textSize = 15f * d
-        p.typeface = Typeface.DEFAULT_BOLD
-        c.drawText("Now Playing", left + half + gap + 18f * d, 84f * d, p)
-        p.typeface = Typeface.DEFAULT
-        p.textSize = 11f * d
-        p.color = 0xBFFFFFFF.toInt()
-        c.drawText("No media playing", left + half + gap + 18f * d, 103f * d, p)
-        p.textSize = 22f * d
-        p.color = Color.WHITE
-        c.drawText("‹   ▶   ›", left + half + gap + 18f * d, 143f * d, p)
-
-        tile(c, RectF(left, 184f * d, left + half * 0.92f, 246f * d), "Focus", false, "Personal")
-        tile(c, RectF(left + half + gap, 184f * d, right, 246f * d), "Rotation", false, "Auto")
-
-        val sliderW = min(74f * d, (w - gap * 3f) / 4f)
-        val sliderTop = 262f * d
-        drawSlider(c, RectF(left, sliderTop, left + sliderW, min(h - 150f * d, sliderTop + 216f * d)), 0.62f, "☼")
-        drawSlider(c, RectF(left + sliderW + gap, sliderTop, left + sliderW * 2f + gap, min(h - 150f * d, sliderTop + 216f * d)), 0.48f, "◖")
-
-        val buttonStart = left + sliderW * 2f + gap * 2f
-        val small = min(66f * d, (w - buttonStart - left - gap * 2f) / 3f)
-        val labels = listOf("⌁", "▣", "⌾", "◉", "⌕", "⚙")
-        labels.forEachIndexed { i, label ->
-            val col = i % 3
-            val row = i / 3
-            val x = buttonStart + col * (small + gap)
-            val y = sliderTop + row * (small + gap)
-            glass(c, RectF(x, y, x + small, y + small), small / 2f, if (i == 2) 0xB66D5520.toInt() else 0xA9161A23.toInt())
-            p.color = Color.WHITE
-            p.textAlign = Paint.Align.CENTER
-            p.textSize = 19f * d
-            c.drawText(label, x + small / 2f, y + small * 0.61f, p)
-        }
-    }
-
-    private fun drawSlider(c: Canvas, r: RectF, value: Float, glyph: String) {
-        glass(c, r, r.width() / 2f, 0x94161A22.toInt())
-        val inner = RectF(r.left + 4f * d, r.bottom - r.height() * value, r.right - 4f * d, r.bottom - 4f * d)
-        p.color = 0xE7FFFFFF.toInt()
-        c.drawRoundRect(inner, inner.width() / 2f, inner.width() / 2f, p)
-        p.textAlign = Paint.Align.CENTER
-        p.color = 0xE6000000.toInt()
-        p.textSize = 17f * d
-        c.drawText(glyph, r.centerX(), r.bottom - 16f * d, p)
-    }
-
-    private fun notifications(c: Canvas, w: Float, h: Float) {
-        header(c, "Notifications", "Live notifications from Android Notification Access")
-        val ns = AetherRuntime.registry.notifications.all()
-        if (ns.isEmpty()) {
-            empty(c, w, h, "Enable Notification Access to populate this surface.")
-            return
-        }
-        ns.take(10).forEachIndexed { i, n ->
-            val y = 104f * d + i * 82f * d
-            glass(c, RectF(18f * d, y, w - 18f * d, y + 70f * d), 22f * d, 0xAF151A22.toInt())
-            p.color = 0xECFFFFFF.toInt()
-            p.textAlign = Paint.Align.LEFT
-            p.typeface = Typeface.DEFAULT_BOLD
-            p.textSize = 13f * d
-            c.drawText(n.title.ifBlank { "Notification" }, 38f * d, y + 26f * d, p)
-            p.typeface = Typeface.DEFAULT
-            p.color = 0xC8FFFFFF.toInt()
-            p.textSize = 11f * d
-            c.drawText(n.text.take(72), 38f * d, y + 48f * d, p)
-            p.color = 0x76FFFFFF.toInt()
-            p.textSize = 9f * d
-            p.textAlign = Paint.Align.RIGHT
-            c.drawText(n.packageName.substringAfterLast('.').take(16), w - 38f * d, y + 26f * d, p)
-        }
-    }
-
-    private fun widgets(c: Canvas, w: Float, h: Float) {
-        header(c, "Live Widgets", "Android AppWidget providers")
-        glass(c, RectF(22f * d, 106f * d, w - 22f * d, 204f * d), 28f * d)
-        p.textAlign = Paint.Align.LEFT
-        p.color = Color.WHITE
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 18f * d
-        c.drawText("Widget space", 42f * d, 146f * d, p)
-        p.typeface = Typeface.DEFAULT
-        p.color = 0xBFFFFFFF.toInt()
-        p.textSize = 12f * d
-        c.drawText("Real provider-backed widgets remain interactive here.", 42f * d, 171f * d, p)
-        glass(c, RectF(22f * d, 220f * d, w - 22f * d, 280f * d), 24f * d, 0xA9121620.toInt())
-        p.color = Color.WHITE
-        p.textAlign = Paint.Align.CENTER
-        p.textSize = 14f * d
-        c.drawText("+   Add widget", w / 2f, 258f * d, p)
-    }
-
-    private fun multi(c: Canvas, w: Float, h: Float) {
-        header(c, "Multitask", "Recent apps • Android windowing where supported")
-        val list = history.load().mapNotNull { e -> apps.firstOrNull { it.packageName == e.packageName } }.distinctBy { it.packageName }.take(6)
-        if (list.isEmpty()) {
-            empty(c, w, h, "No recent apps yet.")
-            return
-        }
-        list.forEachIndexed { i, a ->
-            val y = 104f * d + i * 80f * d
-            glass(c, RectF(22f * d, y, w - 22f * d, y + 66f * d), 22f * d)
-            icon(c, a.packageName, RectF(38f * d, y + 10f * d, 84f * d, y + 56f * d))
-            p.color = Color.WHITE
-            p.textAlign = Paint.Align.LEFT
-            p.textSize = 13f * d
-            p.typeface = Typeface.DEFAULT_BOLD
-            c.drawText(a.label, 100f * d, y + 28f * d, p)
-            p.typeface = Typeface.DEFAULT
-            p.color = 0xBFFFFFFF.toInt()
-            p.textSize = 10f * d
-            c.drawText("Open • split • supported floating window", 100f * d, y + 48f * d, p)
-        }
-    }
-
-    private fun setup(c: Canvas, w: Float, h: Float) {
-        header(c, "Setup Center", "Finish the system integrations Aether can request")
-        listOf("Default launcher", "Overlay permission", "Notification access", "Accessibility", "Write system settings", "Aether Settings").forEachIndexed { i, label ->
-            val y = 106f * d + i * 68f * d
-            glass(c, RectF(22f * d, y, w - 22f * d, y + 56f * d), 19f * d)
-            p.color = Color.WHITE
-            p.textAlign = Paint.Align.LEFT
-            p.textSize = 13f * d
-            c.drawText(label, 40f * d, y + 33f * d, p)
-        }
-    }
-
-    private fun about(c: Canvas, w: Float, h: Float) {
-        glass(c, RectF(24f * d, 118f * d, w - 24f * d, h - 98f * d), 34f * d, 0xA9131820.toInt())
-        p.textAlign = Paint.Align.CENTER
-        p.color = Color.WHITE
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 62f * d
-        c.drawText("A", w / 2f, 222f * d, p)
-        p.textSize = 21f * d
-        c.drawText("AETHER", w / 2f, 262f * d, p)
-        p.typeface = Typeface.DEFAULT
-        p.color = 0xBFFFFFFF.toInt()
-        p.textSize = 12f * d
-        c.drawText("Android launcher + interaction layer", w / 2f, 290f * d, p)
-    }
-
-    private fun empty(c: Canvas, w: Float, h: Float, s: String) {
-        p.color = 0xCFFFFFFF.toInt()
-        p.textAlign = Paint.Align.CENTER
-        p.textSize = 14f * d
-        c.drawText(s, w / 2f, h * 0.44f, p)
-    }
-
-    override fun onTouchEvent(e: MotionEvent): Boolean {
-        when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                downX = e.x
-                downY = e.y
-                return true
-            }
-            MotionEvent.ACTION_UP -> {
-                val dx = e.x - downX
-                val dy = e.y - downY
-                if (abs(dx) > 80f * d || abs(dy) > 80f * d) {
-                    animate().translationY(height * 0.06f).alpha(0.35f).setDuration(150L)
-                        .withEndAction { (context as? Activity)?.finish() }.start()
-                    return true
-                }
-                when (surface) {
-                    AetherSurface.DRAWER -> drawerTap(e.x, e.y)
-                    AetherSurface.HISTORY -> historyTap(e.x, e.y)
-                    AetherSurface.WIDGETS -> if (downY > 210f * d) context.startActivity(Intent(context, AetherWidgetHostActivity::class.java))
-                    AetherSurface.FOLDER -> launchAt(e.x, e.y, 3, 118f * d, folderApps())
-                    AetherSurface.MULTITASK -> multiTap(e.y)
-                    AetherSurface.QUICK -> quickTap(e.y)
-                    AetherSurface.CONTROL -> controlTap(e.x, e.y)
-                    AetherSurface.SETUP_CENTER -> setupTap(e.y)
-                }
-                return true
-            }
-        }
-        return true
-    }
-
-    private fun drawerTap(x: Float, y: Float) {
-        if (y in 88f * d..152f * d) {
-            if (x < width * 0.76f) context.startActivity(Intent(context, AetherSearchActivity::class.java)) else createFolder()
-            return
-        }
-        if (y > 152f * d) launchAt(x, y, cfg.load().grid.columns.coerceIn(4, 9), 168f * d, apps)
-    }
-
-    private fun historyTap(x: Float, y: Float) {
-        if (y in 88f * d..152f * d && x > width * 0.55f) {
-            history.clear()
-            invalidate()
-            return
-        }
-        launchAt(x, y, 3, 168f * d, history.load().mapNotNull { h -> apps.firstOrNull { it.packageName == h.packageName } }.distinctBy { it.packageName })
-    }
-
-    private fun launchAt(x: Float, y: Float, cols: Int, top: Float, list: List<AppInfo>) {
-        val gap = 12f * d
-        val left = 22f * d
-        val cell = (width - left * 2f - gap * (cols - 1)) / cols
-        val row = ((y - top) / (88f * d)).toInt()
-        val col = ((x - left) / (cell + gap)).toInt()
-        val i = row * cols + col
-        if (col in 0 until cols && row >= 0 && i in list.indices) {
-            history.record(list[i].packageName)
-            launcher.launchIntent(list[i].packageName)?.let { context.startActivity(it) }
-        }
-    }
-
-    private fun folderApps() = folders.load().firstOrNull { it.id == folderId || it.name == folderTitle }?.packages?.mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }.orEmpty()
-
-    private fun createFolder() {
-        val selected = BooleanArray(apps.size)
-        AlertDialog.Builder(context)
-            .setTitle("New Aether Folder")
-            .setMultiChoiceItems(apps.map { it.label }.toTypedArray(), selected) { _, i, v -> selected[i] = v }
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Next") { _, _ ->
-                val chosen = apps.indices.filter { selected[it] }.map { apps[it].packageName }
-                if (chosen.isEmpty()) return@setPositiveButton
-                val input = EditText(context).apply { hint = "Folder name" }
-                AlertDialog.Builder(context)
-                    .setTitle("Name folder")
-                    .setView(input)
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Save") { _, _ ->
-                        folders.save(AetherFolder(UUID.randomUUID().toString(), input.text.toString().trim().ifBlank { "Folder" }, chosen))
-                        invalidate()
-                    }.show()
-            }.show()
-    }
-
-    private fun quickTap(y: Float) {
-        when (((y - 138f * d) / (72f * d)).toInt()) {
-            0 -> tool("notes")
-            1 -> tool("voice")
-            2 -> tool("calculator")
-            3 -> tool("screenshot")
-            4 -> tool("clipboard")
-            5 -> context.startActivity(Intent(context, AetherSurfaceActivity::class.java).putExtra("surface", AetherSurface.HISTORY))
-            6 -> context.startActivity(Intent(context, AetherWidgetHostActivity::class.java))
-            7 -> context.startActivity(Intent(context, AetherSettingsActivity::class.java))
-        }
-    }
-
-    private fun tool(name: String) {
-        context.startActivity(Intent(context, AetherToolsActivity::class.java).putExtra(AetherToolsActivity.EXTRA_TOOL, name))
-    }
-
-    private fun controlTap(x: Float, y: Float) {
-        when {
-            y in 58f * d..112f * d && x < width / 2f -> AetherSystemActions.openWifi(context)
-            y in 112f * d..170f * d && x < width / 2f -> AetherSystemActions.openBluetooth(context)
-            y in 184f * d..246f * d && x < width / 2f -> AetherSystemActions.toggleDnd(context)
-            y in 184f * d..246f * d && x >= width / 2f -> AetherSystemActions.toggleRotation(context)
-            x < width * 0.28f && y > 255f * d -> AetherSystemActions.adjustBrightness(context, 10)
-            x < width * 0.44f && y > 255f * d -> AetherSystemActions.adjustBrightness(context, -10)
-            else -> AetherSystemActions.openSettings(context)
-        }
-    }
-
-    private fun multiTap(y: Float) {
-        val list = history.load().mapNotNull { h -> apps.firstOrNull { it.packageName == h.packageName } }.distinctBy { it.packageName }
-        val i = ((y - 104f * d) / (80f * d)).toInt()
-        if (i in list.indices) AetherSystemActions.launchAdjacent(context, list[i].packageName)
-    }
-
-    private fun setupTap(y: Float) {
-        when (((y - 106f * d) / (68f * d)).toInt()) {
-            0 -> context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-            1 -> context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).setData(android.net.Uri.parse("package:${context.packageName}")))
-            2 -> AetherSystemActions.openNotificationAccess(context)
-            3 -> context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            4 -> AetherSystemActions.requestWriteSettings(context)
-            5 -> context.startActivity(Intent(context, AetherSettingsActivity::class.java))
-        }
-    }
+    private val history=AetherHistoryStore(c); private val dock=AetherDockStore(c); private val folders=AetherFolderStore(c); private val cfg=AetherSettingsStore(c)
+    init { setLayerType(View.LAYER_TYPE_SOFTWARE,null); translationY=18f*d; alpha=.98f; SpringAnimation(this,DynamicAnimation.TRANSLATION_Y).apply{spring=SpringForce(0f).apply{stiffness=520f;dampingRatio=.82f}}.start() }
+    override fun onDraw(c:Canvas){val w=width.toFloat();val h=height.toFloat();p.shader=LinearGradient(0f,0f,0f,h,0x1905090D,0x0805090D,Shader.TileMode.CLAMP);c.drawRect(0f,0f,w,h,p);p.shader=null;when(surface){AetherSurface.CONTROL->control(c,w,h);AetherSurface.QUICK->quick(c,w,h);AetherSurface.DRAWER->drawer(c,w,h);AetherSurface.HISTORY->historySurface(c,w,h);AetherSurface.NOTIFICATIONS->notifications(c,w,h);AetherSurface.WIDGETS->widgets(c,w,h);AetherSurface.FOLDER->folder(c,w,h);AetherSurface.MULTITASK->multi(c,w,h);AetherSurface.SETUP_CENTER->setup(c,w,h);else->about(c,w,h)}}
+    private fun header(c:Canvas,title:String,subtitle:String){p.textAlign=Paint.Align.LEFT;p.typeface=Typeface.create("sans-serif",Typeface.NORMAL);p.color=0xECFFFFFF.toInt();p.textSize=30f*d;c.drawText(title,24f*d,56f*d,p);p.color=0xB8FFFFFF.toInt();p.textSize=12f*d;c.drawText(subtitle,24f*d,80f*d,p);p.textAlign=Paint.Align.CENTER}
+    private fun glass(c:Canvas,r:RectF,rad:Float,base:Int=0xBE151A22.toInt()){p.color=base;p.setShadowLayer(18f*d,0f,8f*d,0x72000000);c.drawRoundRect(r,rad,rad,p);p.clearShadowLayer();p.shader=LinearGradient(0f,r.top,0f,r.bottom,0x42FFFFFF,0x10FFFFFF,Shader.TileMode.CLAMP);c.drawRoundRect(RectF(r.left+1f,r.top+1f,r.right-1f,r.bottom-1f),rad,rad,p);p.shader=null;p.style=Paint.Style.STROKE;p.strokeWidth=max(1f,d);p.color=0x4AFFFFFF.toInt();c.drawRoundRect(RectF(r.left+1f,r.top+1f,r.right-1f,r.bottom-1f),rad,rad,p);p.style=Paint.Style.FILL;p.shader=LinearGradient(0f,r.top,0f,r.top+r.height()*.24f,0x28FFFFFF,0x00FFFFFF,Shader.TileMode.CLAMP);c.drawRoundRect(r,rad,rad,p);p.shader=null}
+    private fun icon(c:Canvas,pkg:String,r:RectF){launcher.icon(pkg)?.let{d:Drawable->d.setBounds(r.left.toInt(),r.top.toInt(),r.right.toInt(),r.bottom.toInt());d.draw(c)}}
+    private fun tile(c:Canvas,r:RectF,label:String,active:Boolean=false,detail:String?=null){glass(c,r,min(24f*d,r.height()*.32f),if(active)0xD93A77D9.toInt() else 0xA8151A22.toInt());p.color=Color.WHITE;p.textAlign=Paint.Align.LEFT;p.textSize=14f*d;p.typeface=Typeface.DEFAULT_BOLD;c.drawText(label,r.left+16f*d,r.top+27f*d,p);if(!detail.isNullOrBlank()){p.typeface=Typeface.DEFAULT;p.textSize=9f*d;p.color=0xBFFFFFFF.toInt();c.drawText(detail.take(24),r.left+16f*d,r.top+44f*d,p)};p.textAlign=Paint.Align.CENTER;p.typeface=Typeface.DEFAULT}
+    private fun headerlessStatus(c:Canvas,w:Float){p.textAlign=Paint.Align.LEFT;p.color=0xE6FFFFFF.toInt();p.textSize=12f*d;c.drawText(java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date()),28f*d,40f*d,p);p.textAlign=Paint.Align.RIGHT;p.color=0xDFFFFFFF.toInt();c.drawText("●  ▮  100%",w-28f*d,40f*d,p);p.textAlign=Paint.Align.CENTER}
+    private fun drawer(c:Canvas,w:Float,h:Float){header(c,"Apps","Search, organize and launch your installed apps");glass(c,RectF(22f*d,96f*d,w-22f*d,146f*d),25f*d,0xA9121620.toInt());p.color=0xCCFFFFFF.toInt();p.textAlign=Paint.Align.LEFT;p.textSize=14f*d;c.drawText("⌕  Search apps",40f*d,127f*d,p);p.textAlign=Paint.Align.CENTER;c.drawText("+",w-48f*d,128f*d,p);val g=cfg.load().grid;val cols=g.columns.coerceIn(4,9);val gap=10f*d;val left=20f*d;val top=168f*d;val cell=(w-left*2f-gap*(cols-1))/cols;val rows=((h-top-24f*d)/(78f*d)).toInt().coerceAtMost(9);val size=min(g.iconSize*d,cell*.62f);apps.take(cols*rows).forEachIndexed{i,a->val col=i%cols;val row=i/cols;val x=left+col*(cell+gap);val y=top+row*78f*d;icon(c,a.packageName,RectF(x+cell/2f-size/2f,y,x+cell/2f+size/2f,y+size));p.color=0xE6FFFFFF.toInt();p.textAlign=Paint.Align.CENTER;p.typeface=Typeface.DEFAULT;p.textSize=min(10f*d,cell*.16f);c.drawText(a.label.take(11),x+cell/2f,y+size+16f*d,p)}}
+    private fun historySurface(c:Canvas,w:Float,h:Float){header(c,"History","Recently launched • persistent on-device history");glass(c,RectF(w*.60f,94f*d,w-22f*d,146f*d),24f*d);p.color=0xE6FFFFFF.toInt();p.textSize=12f*d;p.textAlign=Paint.Align.CENTER;c.drawText("Clear history",w*.78f,126f*d,p);val list=history.load().mapNotNull{e->apps.firstOrNull{it.packageName==e.packageName}}.distinctBy{it.packageName};if(list.isEmpty())empty(c,w,h,"No launch history yet.")else grid(c,w,h,list,3,168f*d)}
+    private fun folder(c:Canvas,w:Float,h:Float){header(c,folderTitle?:"Folder","Aether folder");val f=folders.load().firstOrNull{it.id==folderId||it.name==folderTitle};val list=f?.packages?.mapNotNull{pkg->apps.firstOrNull{it.packageName==pkg}}.orEmpty();if(list.isEmpty())empty(c,w,h,"This folder is empty.")else grid(c,w,h,list,3,118f*d)}
+    private fun grid(c:Canvas,w:Float,h:Float,list:List<AppInfo>,cols:Int,top:Float){val gap=12f*d;val left=22f*d;val cell=(w-left*2f-gap*(cols-1))/cols;val size=min(48f*d,cell*.52f);list.take(48).forEachIndexed{i,a->val col=i%cols;val row=i/cols;val x=left+col*(cell+gap);val y=top+row*88f*d;glass(c,RectF(x,y,x+cell,y+70f*d),22f*d);icon(c,a.packageName,RectF(x+cell/2f-size/2f,y+9f*d,x+cell/2f+size/2f,y+9f*d+size));p.color=Color.WHITE;p.textAlign=Paint.Align.CENTER;p.textSize=10f*d;c.drawText(a.label.take(14),x+cell/2f,y+62f*d,p)}}
+    private fun quick(c:Canvas,w:Float,h:Float){headerlessStatus(c,w);p.color=0xEAFFFFFF.toInt();p.textAlign=Paint.Align.LEFT;p.typeface=Typeface.DEFAULT_BOLD;p.textSize=28f*d;c.drawText("Quick Space",24f*d,88f*d,p);p.typeface=Typeface.DEFAULT;p.color=0xBFFFFFFF.toInt();p.textSize=12f*d;c.drawText("Tools that expand from the edge",24f*d,110f*d,p);val items=listOf("Notes","Voice Recorder","Calculator","Screenshot","Clipboard","Recent Apps","Widgets","Settings");val left=22f*d;val gap=12f*d;val cell=(w-left*2f-gap)/2f;items.forEachIndexed{i,label->val col=i%2;val row=i/2;val x=left+col*(cell+gap);val y=138f*d+row*72f*d;tile(c,RectF(x,y,x+cell,y+58f*d),label,i==0)}}
+    private fun control(c:Canvas,w:Float,h:Float){headerlessStatus(c,w);val gap=12f*d;val left=18f*d;val right=w-18f*d;val half=(w-2f*left-gap)/2f;glass(c,RectF(left,58f*d,left+half,170f*d),26f*d,0xA91A2030.toInt());tile(c,RectF(left+10f*d,68f*d,left+half-10f*d,112f*d),"Wi-Fi",true,"Connected");tile(c,RectF(left+10f*d,120f*d,left+half-10f*d,164f*d),"Bluetooth",false,"On");glass(c,RectF(left+half+gap,58f*d,right,170f*d),26f*d,0x9D17202A.toInt());p.textAlign=Paint.Align.LEFT;p.color=0xE8FFFFFF.toInt();p.textSize=15f*d;p.typeface=Typeface.DEFAULT_BOLD;c.drawText("Now Playing",left+half+gap+18f*d,84f*d,p);p.typeface=Typeface.DEFAULT;p.textSize=11f*d;p.color=0xBFFFFFFF.toInt();c.drawText("No media playing",left+half+gap+18f*d,103f*d,p);p.textSize=22f*d;p.color=Color.WHITE;c.drawText("‹   ▶   ›",left+half+gap+18f*d,143f*d,p);tile(c,RectF(left,184f*d,left+half*.92f,246f*d),"Focus",false,"Personal");tile(c,RectF(left+half+gap,184f*d,right,246f*d),"Rotation",false,"Auto");val sliderW=min(74f*d,(w-gap*3f)/4f);val sliderTop=262f*d;drawSlider(c,RectF(left,sliderTop,left+sliderW,min(h-150f*d,sliderTop+216f*d)),.62f,"☼");drawSlider(c,RectF(left+sliderW+gap,sliderTop,left+sliderW*2f+gap,min(h-150f*d,sliderTop+216f*d)),.48f,"◖");val buttonStart=left+sliderW*2f+gap*2f;val small=min(66f*d,(w-buttonStart-left-gap*2f)/3f);listOf("⌁","▣","⌾","◉","⌕","⚙").forEachIndexed{i,label->val col=i%3;val row=i/3;val x=buttonStart+col*(small+gap);val y=sliderTop+row*(small+gap);glass(c,RectF(x,y,x+small,y+small),small/2f,if(i==2)0xB66D5520.toInt()else 0xA9161A23.toInt());p.color=Color.WHITE;p.textAlign=Paint.Align.CENTER;p.textSize=19f*d;c.drawText(label,x+small/2f,y+small*.61f,p)}}
+    private fun drawSlider(c:Canvas,r:RectF,value:Float,glyph:String){glass(c,r,r.width()/2f,0x94161A22.toInt());val inner=RectF(r.left+4f*d,r.bottom-r.height()*value,r.right-4f*d,r.bottom-4f*d);p.color=0xE7FFFFFF.toInt();c.drawRoundRect(inner,inner.width()/2f,inner.width()/2f,p);p.textAlign=Paint.Align.CENTER;p.color=0xE6000000.toInt();p.textSize=17f*d;c.drawText(glyph,r.centerX(),r.bottom-16f*d,p)}
+    private fun notifications(c:Canvas,w:Float,h:Float){header(c,"Notifications","Live notifications from Android Notification Access");val ns=AetherRuntime.registry.notifications.all();if(ns.isEmpty()){empty(c,w,h,"Enable Notification Access to populate this surface.");return};ns.take(10).forEachIndexed{i,n->val y=104f*d+i*82f*d;glass(c,RectF(18f*d,y,w-18f*d,y+70f*d),22f*d,0xAF151A22.toInt());p.color=0xECFFFFFF.toInt();p.textAlign=Paint.Align.LEFT;p.typeface=Typeface.DEFAULT_BOLD;p.textSize=13f*d;c.drawText(n.title.ifBlank{"Notification"},38f*d,y+26f*d,p);p.typeface=Typeface.DEFAULT;p.color=0xC8FFFFFF.toInt();p.textSize=11f*d;c.drawText(n.text.take(72),38f*d,y+48f*d,p);p.color=0x76FFFFFF.toInt();p.textSize=9f*d;p.textAlign=Paint.Align.RIGHT;c.drawText(n.packageName.substringAfterLast('.').take(16),w-38f*d,y+26f*d,p)}}
+    private fun widgets(c:Canvas,w:Float,h:Float){header(c,"Live Widgets","Android AppWidget providers");glass(c,RectF(22f*d,106f*d,w-22f*d,204f*d),28f*d);p.textAlign=Paint.Align.LEFT;p.color=Color.WHITE;p.typeface=Typeface.DEFAULT_BOLD;p.textSize=18f*d;c.drawText("Widget space",42f*d,146f*d,p);p.typeface=Typeface.DEFAULT;p.color=0xBFFFFFFF.toInt();p.textSize=12f*d;c.drawText("Real provider-backed widgets remain interactive here.",42f*d,171f*d,p);glass(c,RectF(22f*d,220f*d,w-22f*d,280f*d),24f*d,0xA9121620.toInt());p.color=Color.WHITE;p.textAlign=Paint.Align.CENTER;p.textSize=14f*d;c.drawText("+   Add widget",w/2f,258f*d,p)}
+    private fun multi(c:Canvas,w:Float,h:Float){header(c,"Multitask","Recent apps • Android windowing where supported");val list=history.load().mapNotNull{e->apps.firstOrNull{it.packageName==e.packageName}}.distinctBy{it.packageName}.take(6);if(list.isEmpty()){empty(c,w,h,"No recent apps yet.");return};list.forEachIndexed{i,a->{val y=104f*d+i*80f*d;glass(c,RectF(22f*d,y,w-22f*d,y+66f*d),22f*d);icon(c,a.packageName,RectF(38f*d,y+10f*d,84f*d,y+56f*d));p.color=Color.WHITE;p.textAlign=Paint.Align.LEFT;p.textSize=13f*d;p.typeface=Typeface.DEFAULT_BOLD;c.drawText(a.label,100f*d,y+28f*d,p);p.typeface=Typeface.DEFAULT;p.color=0xBFFFFFFF.toInt();p.textSize=10f*d;c.drawText("Open • split • supported floating window",100f*d,y+48f*d,p)}}}
+    private fun setup(c:Canvas,w:Float,h:Float){header(c,"Setup Center","Finish the system integrations Aether can request");listOf("Default launcher","Overlay permission","Notification access","Accessibility","Write system settings","Aether Settings").forEachIndexed{i,label->val y=106f*d+i*68f*d;glass(c,RectF(22f*d,y,w-22f*d,y+56f*d),19f*d);p.color=Color.WHITE;p.textAlign=Paint.Align.LEFT;p.textSize=13f*d;c.drawText(label,40f*d,y+33f*d,p)}}
+    private fun about(c:Canvas,w:Float,h:Float){glass(c,RectF(24f*d,118f*d,w-24f*d,h-98f*d),34f*d,0xA9131820.toInt());p.textAlign=Paint.Align.CENTER;p.color=Color.WHITE;p.typeface=Typeface.DEFAULT_BOLD;p.textSize=62f*d;c.drawText("A",w/2f,222f*d,p);p.textSize=21f*d;c.drawText("AETHER",w/2f,262f*d,p);p.typeface=Typeface.DEFAULT;p.color=0xBFFFFFFF.toInt();p.textSize=12f*d;c.drawText("Android launcher + interaction layer",w/2f,290f*d,p)}
+    private fun empty(c:Canvas,w:Float,h:Float,s:String){p.color=0xCFFFFFFF.toInt();p.textAlign=Paint.Align.CENTER;p.textSize=14f*d;c.drawText(s,w/2f,h*.44f,p)}
+    override fun onTouchEvent(e:MotionEvent):Boolean{when(e.actionMasked){MotionEvent.ACTION_DOWN->{downX=e.x;downY=e.y;return true};MotionEvent.ACTION_UP->{val dx=e.x-downX;val dy=e.y-downY;if(abs(dx)>80f*d||abs(dy)>80f*d){animate().translationY(height*.06f).alpha(.35f).setDuration(150L).withEndAction{(context as?Activity)?.finish()}.start();return true};when(surface){AetherSurface.DRAWER->drawerTap(e.x,e.y);AetherSurface.HISTORY->historyTap(e.x,e.y);AetherSurface.WIDGETS->if(downY>210f*d)context.startActivity(Intent(context,AetherWidgetHostActivity::class.java));AetherSurface.FOLDER->launchAt(e.x,e.y,3,118f*d,folderApps());AetherSurface.MULTITASK->multiTap(e.y);AetherSurface.QUICK->quickTap(e.y);AetherSurface.CONTROL->controlTap(e.x,e.y);AetherSurface.SETUP_CENTER->setupTap(e.y)};return true}};return true}
+    private fun drawerTap(x:Float,y:Float){if(y in 88f*d..152f*d){if(x<width*.76f)context.startActivity(Intent(context,AetherSearchActivity::class.java))else createFolder();return};if(y>152f*d)launchAt(x,y,cfg.load().grid.columns.coerceIn(4,9),168f*d,apps)}
+    private fun historyTap(x:Float,y:Float){if(y in 88f*d..152f*d&&x>width*.55f){history.clear();invalidate();return};launchAt(x,y,3,168f*d,history.load().mapNotNull{h->apps.firstOrNull{it.packageName==h.packageName}}.distinctBy{it.packageName})}
+    private fun launchAt(x:Float,y:Float,cols:Int,top:Float,list:List<AppInfo>){val gap=12f*d;val left=22f*d;val cell=(width-left*2f-gap*(cols-1))/cols;val row=((y-top)/(88f*d)).toInt();val col=((x-left)/(cell+gap)).toInt();val i=row*cols+col;if(col in 0 until cols&&row>=0&&i in list.indices){history.record(list[i].packageName);launcher.launchIntent(list[i].packageName)?.let{context.startActivity(it)}}}
+    private fun folderApps()=folders.load().firstOrNull{it.id==folderId||it.name==folderTitle}?.packages?.mapNotNull{pkg->apps.firstOrNull{it.packageName==pkg}}.orEmpty()
+    private fun createFolder(){val selected=BooleanArray(apps.size);AlertDialog.Builder(context).setTitle("New Aether Folder").setMultiChoiceItems(apps.map{it.label}.toTypedArray(),selected){_,i,v->selected[i]=v}.setNegativeButton("Cancel",null).setPositiveButton("Next"){_,_->val chosen=apps.indices.filter{selected[it]}.map{apps[it].packageName};if(chosen.isEmpty())return@setPositiveButton;val input=EditText(context).apply{hint="Folder name"};AlertDialog.Builder(context).setTitle("Name folder").setView(input).setNegativeButton("Cancel",null).setPositiveButton("Save"){_,_->folders.save(AetherFolder(UUID.randomUUID().toString(),input.text.toString().trim().ifBlank{"Folder"},chosen));invalidate()}.show()}.show()}
+    private fun quickTap(y:Float){when(((y-138f*d)/(72f*d)).toInt()){0->tool("notes");1->tool("voice");2->tool("calculator");3->tool("screenshot");4->tool("clipboard");5->context.startActivity(Intent(context,AetherSurfaceActivity::class.java).putExtra("surface",AetherSurface.HISTORY));6->context.startActivity(Intent(context,AetherWidgetHostActivity::class.java));7->context.startActivity(Intent(context,AetherSettingsActivity::class.java))}}
+    private fun tool(name:String){context.startActivity(Intent(context,AetherToolsActivity::class.java).putExtra(AetherToolsActivity.EXTRA_TOOL,name))}
+    private fun controlTap(x:Float,y:Float){when{y in 58f*d..112f*d&&x<width/2f->AetherSystemActions.openWifi(context);y in 112f*d..170f*d&&x<width/2f->AetherSystemActions.openBluetooth(context);y in 184f*d..246f*d&&x<width/2f->AetherSystemActions.toggleDnd(context);y in 184f*d..246f*d&&x>=width/2f->AetherSystemActions.toggleRotation(context);x<width*.28f&&y>255f*d->AetherSystemActions.adjustBrightness(context,10);x<width*.44f&&y>255f*d->AetherSystemActions.adjustBrightness(context,-10);else->AetherSystemActions.openSettings(context)}}
+    private fun multiTap(y:Float){val list=history.load().mapNotNull{h->apps.firstOrNull{it.packageName==h.packageName}}.distinctBy{it.packageName};val i=((y-104f*d)/(80f*d)).toInt();if(i in list.indices)AetherSystemActions.launchAdjacent(context,list[i].packageName)}
+    private fun setupTap(y:Float){when(((y-106f*d)/(68f*d)).toInt()){0->context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS));1->context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).setData(android.net.Uri.parse("package:${context.packageName}")));2->AetherSystemActions.openNotificationAccess(context);3->context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));4->AetherSystemActions.requestWriteSettings(context);5->context.startActivity(Intent(context,AetherSettingsActivity::class.java))}}
 }
