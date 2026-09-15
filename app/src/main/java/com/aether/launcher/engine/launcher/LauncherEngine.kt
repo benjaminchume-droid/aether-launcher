@@ -4,16 +4,30 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import com.aether.launcher.engine.*
+import java.util.concurrent.ConcurrentHashMap
+
 data class AppInfo(val packageName: String, val label: String)
+
 class LauncherEngine(private val context: Context): AetherEngine {
     override val id = "launcher"
     private var state = EngineHealth.STOPPED
     private val pm get() = context.packageManager
-    override fun start() { state = EngineHealth.RUNNING }
-    override fun stop() { state = EngineHealth.STOPPED }
+    private val iconCache = ConcurrentHashMap<String, Drawable>()
+    private var appCache: List<AppInfo> = emptyList()
+
+    override fun start() { state = EngineHealth.RUNNING; refresh() }
+    override fun stop() { state = EngineHealth.STOPPED; iconCache.clear(); appCache = emptyList() }
     override fun health() = state
-    fun apps(): List<AppInfo> = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-        .map { AppInfo(it.activityInfo.packageName, it.loadLabel(pm).toString()) }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
-    fun icon(packageName: String): Drawable? = runCatching { pm.getApplicationIcon(packageName) }.getOrNull()
+
+    @Synchronized fun refresh() {
+        appCache = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .map { AppInfo(it.activityInfo.packageName, it.loadLabel(pm).toString()) }
+            .distinctBy { it.packageName }
+            .sortedBy { it.label.lowercase() }
+    }
+
+    fun apps(): List<AppInfo> = appCache.ifEmpty { refresh(); appCache }
+    fun icon(packageName: String): Drawable? = iconCache[packageName] ?: runCatching { pm.getApplicationIcon(packageName) }.getOrNull()?.also { iconCache[packageName] = it }
+    fun clearIconCache() = iconCache.clear()
     fun launchIntent(packageName: String): Intent? = pm.getLaunchIntentForPackage(packageName)
 }
