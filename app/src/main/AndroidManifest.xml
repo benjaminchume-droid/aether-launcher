@@ -8,6 +8,7 @@
         <activity android:name=".AetherActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
         </activity>
+        <activity android:name=".settings.AetherSettingsActivity" android:exported="false" android:label="Aether Settings" />
         <activity android:name=".system.LockActivity" android:exported="false" android:excludeFromRecents="true" android:launchMode="singleTop" />
         <service android:name=".system.AetherOverlayService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Aether persistent interaction and security overlay" />
