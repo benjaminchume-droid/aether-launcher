@@ -1,0 +1,16 @@
+# Android / Gradle
+.gradle/
+build/
+*/build/
+local.properties
+
+# Release signing material — never commit private keys
+*.jks
+*.keystore
+*.p12
+aether-release.keystore
+
+# IDE
+.idea/
+*.iml
+.DS_Store
