@@ -2,6 +2,23 @@ package com.aether.launcher.system
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
-import com.aether.launcher.engine.sensing.AppSensingEngine
-class AetherAccessibilityService:AccessibilityService(){ override fun onAccessibilityEvent(event:AccessibilityEvent?){if(event?.eventType==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){ val pkg=event.packageName?.toString() ?: return; AetherRuntime.sensing.publish(pkg)}} override fun onInterrupt(){} }
-object AetherRuntime { lateinit var sensing:AppSensingEngine }
+import com.aether.launcher.AetherRuntime
+
+class AetherAccessibilityService : AccessibilityService() {
+    override fun onServiceConnected() {
+        if (!::runtimeReady) runtimeReady = true
+        AetherRuntime.initialize(applicationContext)
+        AetherRuntime.sensing.onAppChanged { transition ->
+            if (AetherRuntime.security.isProtected(transition.packageName) && !AetherRuntime.security.isUnlocked(transition.packageName)) {
+                SecurityOverlayController.show(this, transition.packageName)
+            }
+        }
+    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            event.packageName?.toString()?.let { AetherRuntime.sensing.publish(it) }
+        }
+    }
+    override fun onInterrupt() {}
+    companion object { private var runtimeReady = false }
+}
