@@ -1,387 +1,63 @@
 package com.aether.launcher.settings
 
 import android.app.WallpaperManager
-import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Canvas
+import android.content.Intent
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.graphics.Typeface
-import android.os.Build
+import android.graphics.drawable.ColorDrawable
+import android.net.Uri
+import android.provider.Settings
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.widget.*
-import kotlin.math.roundToInt
 
 class AetherSetupView(context: Context, private val onFinished: () -> Unit) : FrameLayout(context) {
-    private val store = AetherSettingsStore(context)
-    private var s = store.load()
-    private var page = 0
-    private val pages = listOf("Hello", "Home", "Grid", "Glass", "Dock", "Dynamic Island", "Quick Space", "Control Center", "Floating Windows", "Split Screen", "Security", "Ready")
-    private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
-    private val density = resources.displayMetrics.density
+    private val store=AetherSettingsStore(context)
+    private var s=store.load()
+    private var page=0
+    private val body=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_HORIZONTAL;setPadding(dp(24),dp(32),dp(24),dp(24))}
+    private val bg=ImageView(context).apply{scaleType=ImageView.ScaleType.CENTER_CROP;alpha=.72f;setImageDrawable(runCatching{WallpaperManager.getInstance(context).drawable}.getOrElse{ColorDrawable(0xFF10141A.toInt())});if(android.os.Build.VERSION.SDK_INT>=31)setRenderEffect(RenderEffect.createBlurEffect(18f,18f,Shader.TileMode.CLAMP))}
 
-    init {
-        addView(WallpaperBlurView(context), LayoutParams(-1, -1))
-        addView(Scroll(context), LayoutParams(-1, -1))
-        render()
+    init{addView(bg,LayoutParams(-1,-1));addView(View(context).apply{setBackgroundColor(0x26050A12)},LayoutParams(-1,-1));addView(ScrollView(context).apply{isFillViewport=true;addView(body)},LayoutParams(-1,-1));render()}
+
+    private fun render(){body.removeAllViews();body.addView(TextView(context).apply{text="AETHER  •  ${page+1}/3";textSize=10f;letterSpacing=.28f;setTextColor(0xAFFFFFFF.toInt());gravity=Gravity.CENTER},lp(-1,32));when(page){0->welcome();1->personalize();2->ready()};body.addView(View(context),lp(-1,14));body.addView(actionButton(if(page==2)"Enter Aether" else "Continue"){if(page==2){store.save(s.copy(setupComplete=true));onFinished()}else{page++;render()}});if(page>0)body.addView(TextView(context).apply{text="‹  Back";textSize=15f;setTextColor(0xDFFFFFFF.toInt());gravity=Gravity.CENTER;setOnClickListener{page--;render()}},lp(-1,50))}
+
+    private fun welcome(){
+        title("Welcome to Aether",42f,112)
+        paragraph("A wallpaper-first launcher with dimensional glass, fluid motion and a home screen you can actually arrange.")
+        card("LIQUID GLASS","Wallpaper stays visible underneath surfaces. Highlights, depth and soft blur replace flat black panels.")
+        card("FLUID HOME","Long-press an app, drag it anywhere, or drop it onto another app to create a folder.")
+        card("SYSTEM LAYER","Dynamic Island, Quick Space, notification activities and security live beside the launcher instead of fighting it.")
     }
 
-    private inner class Scroll(c: Context) : ScrollView(c) {
-        private var gestureDownY = 0f
-        init {
-            isFillViewport = true
-            setBackgroundColor(Color.TRANSPARENT)
-            addView(content, LayoutParams(-1, -1))
-            content.setPadding(dp(24), dp(54), dp(24), dp(30))
-        }
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> gestureDownY = event.y
-                MotionEvent.ACTION_UP -> {
-                    val dy = event.y - gestureDownY
-                    if (dy < -90f * density) {
-                        nextPage()
-                        return true
-                    }
-                    if (dy > 90f * density && page > 0) {
-                        previousPage()
-                        return true
-                    }
-                }
-            }
-            return super.onTouchEvent(event)
-        }
+    private fun personalize(){
+        title("Make it yours",38f,76)
+        paragraph("Choose the starting home behavior. You can change everything later in Aether Settings.")
+        choice("All apps on Home","Every installed launcher app is placed on the home grid.",HomeMode.ALL_APPS)
+        choice("Home + Drawer","Keep a curated home and swipe up for the complete app drawer.",HomeMode.HOME_AND_DRAWER)
+        choice("Drawer only","Minimal home with the drawer as the main app surface.",HomeMode.DRAWER_ONLY)
+        card("APP LOCK","App Lock can be configured after setup from Aether Settings. Protected apps use Android's biometric authentication path.")
     }
 
-    private fun render() {
-        content.removeAllViews()
-        content.addView(TextView(context).apply {
-            text = "AETHER  •  ${page + 1}/${pages.size}"
-            textSize = 11f
-            setTextColor(0xAFFFFFFF.toInt())
-            gravity = Gravity.CENTER
-        }, lp(-1, 30))
-
-        when (page) {
-            0 -> hello()
-            1 -> home()
-            2 -> grid()
-            3 -> glass()
-            4 -> dock()
-            5 -> island()
-            6 -> quick()
-            7 -> control()
-            8 -> windows()
-            9 -> split()
-            10 -> security()
-            11 -> ready()
-        }
-
-        content.addView(View(context), lp(-1, 18))
-        content.addView(GlassButton(context, if (page == pages.lastIndex) "Enter Aether" else "Continue  →") {
-            if (page == pages.lastIndex) {
-                store.save(s.copy(setupComplete = true))
-                onFinished()
-            } else {
-                nextPage()
-            }
-        }, lp(-1, 62))
-        if (page > 0) {
-            content.addView(TextView(context).apply {
-                text = "‹  Back"
-                textSize = 15f
-                setTextColor(0xDFFFFFFF.toInt())
-                gravity = Gravity.CENTER
-                setOnClickListener { previousPage() }
-            }, lp(-1, 48))
-        }
+    private fun ready(){
+        title("Aether is ready",38f,82)
+        paragraph("The launcher is designed to look good before you touch a setting. These optional system permissions unlock the deeper layer.")
+        systemCard("Set as Home","Choose Aether as your Android Home app."){open(Settings.ACTION_HOME_SETTINGS)}
+        systemCard("Liquid Overlay","Allow Aether to draw the Island and edge surfaces above other apps."){runCatching{context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:${context.packageName}")))}}
+        systemCard("Live Activities","Grant Notification Access for live notification and media surfaces."){runCatching{context.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))}}
+        systemCard("Security","Enable Aether's system integration if you want foreground app protection and relock behavior."){runCatching{context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}}
     }
 
-    private fun nextPage() {
-        if (page >= pages.lastIndex) return
-        page++
-        render()
-    }
-
-    private fun previousPage() {
-        if (page <= 0) return
-        page--
-        render()
-    }
-
-    private fun hello() {
-        content.addView(HelloWriteView(context), lp(-1, 148).also { it.setMargins(0, dp(24), 0, 0) })
-        content.addView(TextView(context).apply {
-            text = "A new way to use Android."
-            textSize = 17f
-            setTextColor(0xEFFFFFFF.toInt())
-            gravity = Gravity.CENTER
-            setLineSpacing(5f, 1f)
-        }, lp(-1, 58))
-        content.addView(TextView(context).apply {
-            text = "AETHER"
-            textSize = 12f
-            letterSpacing = .35f
-            setTextColor(0xBFFFFFFF.toInt())
-            gravity = Gravity.CENTER
-        }, lp(-1, 46))
-    }
-
-    private fun home() {
-        hero("Your home", "Choose how Aether organizes your apps.")
-        choice("All apps on Home", "Every installed launcher app appears directly on your pages.", HomeMode.ALL_APPS, s.homeMode) { s = s.copy(homeMode = it); save() }
-        choice("Home + App Drawer", "Clean home, then swipe up for every app.", HomeMode.HOME_AND_DRAWER, s.homeMode) { s = s.copy(homeMode = it); save() }
-        choice("App Drawer only", "Minimal home with the drawer as the main app space.", HomeMode.DRAWER_ONLY, s.homeMode) { s = s.copy(homeMode = it); save() }
-        previewGrid()
-    }
-
-    private fun grid() {
-        hero("Your grid", "Choose density. Icons scale down naturally as the grid grows.")
-        listOf(4 to 4, 4 to 5, 4 to 6, 5 to 5, 5 to 6, 6 to 6, 6 to 7, 7 to 7, 8 to 8, 9 to 9).forEach { value ->
-            choice("${value.first} × ${value.second}", "${value.first * value.second} positions", value, s.grid.columns to s.grid.rows) { selected ->
-                s = s.copy(grid = s.grid.copy(columns = selected.first, rows = selected.second, iconSize = (420 / selected.first).coerceIn(34, 62)))
-                save()
-            }
-        }
-        toggle("App labels", s.grid.showLabels) { s = s.copy(grid = s.grid.copy(showLabels = it)); save() }
-        previewGrid()
-    }
-
-    private fun glass() {
-        hero("Liquid glass", "Translucent, dimensional surfaces that keep the wallpaper alive.")
-        slider("Opacity", 45, 100, s.glass.opacity, "%") { s = s.copy(glass = s.glass.copy(opacity = it)); save() }
-        slider("Blur", 4, 50, s.glass.blur, " px") { s = s.copy(glass = s.glass.copy(blur = it)); save() }
-        slider("Corner radius", 8, 42, s.glass.cornerRadius, " dp") { s = s.copy(glass = s.glass.copy(cornerRadius = it)); save() }
-        slider("Refraction", 0, 40, s.glass.refraction, "%") { s = s.copy(glass = s.glass.copy(refraction = it)); save() }
-        glassCard("Material preview", "Soft highlights, depth and wallpaper visible through every surface.")
-    }
-
-    private fun dock() {
-        hero("Your dock", "Your most-used apps, always within reach.")
-        toggle("Show dock", s.dock.enabled) { s = s.copy(dock = s.dock.copy(enabled = it)); save() }
-        slider("Apps", 3, 8, s.dock.appCount, " apps") { s = s.copy(dock = s.dock.copy(appCount = it)); save() }
-        toggle("Smart groups", s.dock.smartGroups) { s = s.copy(dock = s.dock.copy(smartGroups = it)); save() }
-        toggle("Group similar companies", s.dock.groupByCompany) { s = s.copy(dock = s.dock.copy(groupByCompany = it)); save() }
-        toggle("Group by category", s.dock.groupByCategory) { s = s.copy(dock = s.dock.copy(groupByCategory = it)); save() }
-        glassCard("Dock preview", "A floating glass surface with adaptive icon sizing and spring movement.")
-    }
-
-    private fun island() {
-        hero("Dynamic Island", "One adaptive surface for notifications and live activity.")
-        toggle("Enable Dynamic Island", s.island.enabled) { s = s.copy(island = s.island.copy(enabled = it)); save() }
-        toggle("Adapt to camera cutout", s.island.cutoutAware) { s = s.copy(island = s.island.copy(cutoutAware = it)); save() }
-        toggle("Blur around cutout", s.island.blurSurroundingCutout) { s = s.copy(island = s.island.copy(blurSurroundingCutout = it)); save() }
-        slider("Width", 72, 180, s.island.width, " dp") { s = s.copy(island = s.island.copy(width = it)); save() }
-        slider("Height", 24, 70, s.island.height, " dp") { s = s.copy(island = s.island.copy(height = it)); save() }
-        glassCard("●  Dynamic Island", "Calls • media • timers • recording • navigation • notifications")
-    }
-
-    private fun quick() {
-        hero("Quick Space", "A tiny edge handle expands into your tools.")
-        toggle("Enable Quick Space", s.quickSpace.enabled) { s = s.copy(quickSpace = s.quickSpace.copy(enabled = it)); save() }
-        slider("Trigger distance", 40, 180, s.quickSpace.triggerDistance, " px") { s = s.copy(quickSpace = s.quickSpace.copy(triggerDistance = it)); save() }
-        choice("Right edge", "Swipe inward", QuickEdge.RIGHT, s.quickSpace.edge) { s = s.copy(quickSpace = s.quickSpace.copy(edge = it)); save() }
-        choice("Left edge", "Swipe inward", QuickEdge.LEFT, s.quickSpace.edge) { s = s.copy(quickSpace = s.quickSpace.copy(edge = it)); save() }
-        glassCard("Quick Space", "Notes · Voice · Calculator · Screenshot · Clipboard · Recent")
-    }
-
-    private fun control() {
-        hero("Control Center", "Controls rise from the wallpaper as one glass surface.")
-        toggle("Enable Control Center", s.controlCenter.enabled) { s = s.copy(controlCenter = s.controlCenter.copy(enabled = it)); save() }
-        slider("Tile columns", 1, 4, s.controlCenter.columns, "") { s = s.copy(controlCenter = s.controlCenter.copy(columns = it)); save() }
-        slider("Tile radius", 10, 40, s.controlCenter.tileRadius, " dp") { s = s.copy(controlCenter = s.controlCenter.copy(tileRadius = it)); save() }
-        glassCard("Control Center", "Connectivity • media • brightness • volume • quick actions")
-    }
-
-    private fun windows() {
-        hero("Floating windows", "Move, resize and snap supported applications.")
-        toggle("Enable floating windows", s.floatingWindows.enabled) { s = s.copy(floatingWindows = s.floatingWindows.copy(enabled = it)); save() }
-        toggle("Resize edges", s.floatingWindows.edgeResize) { s = s.copy(floatingWindows = s.floatingWindows.copy(edgeResize = it)); save() }
-        toggle("Resize corners", s.floatingWindows.cornerResize) { s = s.copy(floatingWindows = s.floatingWindows.copy(cornerResize = it)); save() }
-        toggle("Snap to edges", s.floatingWindows.snapWindows) { s = s.copy(floatingWindows = s.floatingWindows.copy(snapWindows = it)); save() }
-        glassCard("Window physics", "Aether uses Android-supported windowing paths and keeps unsupported apps full-screen.")
-    }
-
-    private fun split() {
-        hero("Split screen", "Two apps. One fluid workspace.")
-        toggle("Enable split screen", s.splitScreen.enabled) { s = s.copy(splitScreen = s.splitScreen.copy(enabled = it)); save() }
-        slider("Default ratio", 30, 70, s.splitScreen.defaultRatio, "%") { s = s.copy(splitScreen = s.splitScreen.copy(defaultRatio = it)); save() }
-        toggle("Custom divider", s.splitScreen.allowCustomRatio) { s = s.copy(splitScreen = s.splitScreen.copy(allowCustomRatio = it)); save() }
-        toggle("Remember layouts", s.splitScreen.rememberLayouts) { s = s.copy(splitScreen = s.splitScreen.copy(rememberLayouts = it)); save() }
-        glassCard("Divider preview", "Drag the divider to give either app more room.")
-    }
-
-    private fun security() {
-        hero("Aether Security", "Protect apps with your phone's biometrics.")
-        toggle("Enable App Lock", s.security.appLockEnabled) { s = s.copy(security = s.security.copy(appLockEnabled = it)); save() }
-        toggle("Relock when leaving", s.security.relockOnLeave) { s = s.copy(security = s.security.copy(relockOnLeave = it)); save() }
-        toggle("Relock on screen off", s.security.relockOnScreenOff) { s = s.copy(security = s.security.copy(relockOnScreenOff = it)); save() }
-        glassCard("◉  Biometrics", "Face or fingerprint through Android BiometricPrompt. No emergency keypad.")
-    }
-
-    private fun ready() {
-        hero("You're ready", "Everything can be changed later in Aether Settings.")
-        glassCard("AETHER", "Home • Grid • Glass • Dock • Island • Quick Space\nControl Center • Windows • Split Screen • Security")
-    }
-
-    private fun hero(a: String, b: String) {
-        content.addView(TextView(context).apply { text = a; textSize = 40f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, dp(28), 0, dp(4)) }, lp(-1, 80))
-        content.addView(TextView(context).apply { text = b; textSize = 16f; setTextColor(0xDFFFFFFF.toInt()); gravity = Gravity.CENTER; setLineSpacing(5f, 1f) }, lp(-1, 70))
-    }
-
-    private fun <T> choice(head: String, body: String, value: T, selected: T, action: (T) -> Unit) {
-        val box = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(15), dp(18), dp(15))
-            setBackground(glassDrawable())
-            setOnClickListener {
-                animate().scaleX(.985f).scaleY(.985f).setDuration(70L).withEndAction { animate().scaleX(1f).scaleY(1f).setDuration(90L).start(); action(value) }.start()
-            }
-        }
-        box.addView(TextView(context).apply { text = (if (value == selected) "●  " else "○  ") + head; textSize = 16f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD })
-        box.addView(TextView(context).apply { text = body; textSize = 12f; setTextColor(0xBFFFFFFF.toInt()); setPadding(dp(24), dp(5), 0, 0) })
-        content.addView(box, lp(-1, -2).also { it.setMargins(0, dp(5), 0, dp(5)) })
-    }
-
-    private fun toggle(label: String, value: Boolean, action: (Boolean) -> Unit) {
-        val row = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), 0, dp(10), 0); setBackground(glassDrawable()) }
-        row.addView(TextView(context).apply { text = label; textSize = 15f; setTextColor(Color.WHITE) }, LinearLayout.LayoutParams(0, dp(58), 1f))
-        row.addView(Switch(context).apply { isChecked = value; setOnCheckedChangeListener { _, next -> action(next) } }, LinearLayout.LayoutParams(dp(60), dp(56)))
-        content.addView(row, lp(-1, 60).also { it.setMargins(0, dp(5), 0, dp(5)) })
-    }
-
-    private fun slider(label: String, min: Int, max: Int, value: Int, suffix: String, action: (Int) -> Unit) {
-        val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); setBackground(glassDrawable()) }
-        box.addView(TextView(context).apply { text = label; textSize = 15f; setTextColor(Color.WHITE) })
-        val out = TextView(context).apply { text = "$value$suffix"; textSize = 14f; setTextColor(Color.WHITE) }
-        box.addView(out)
-        box.addView(SeekBar(context).apply {
-            this.max = max - min
-            progress = (value - min).coerceIn(0, this.max)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(v: SeekBar?, p: Int, user: Boolean) { val n = p + min; out.text = "$n$suffix"; if (user) action(n) }
-                override fun onStartTrackingTouch(v: SeekBar?) = Unit
-                override fun onStopTrackingTouch(v: SeekBar?) = Unit
-            })
-        })
-        content.addView(box, lp(-1, 82).also { it.setMargins(0, dp(5), 0, dp(5)) })
-    }
-
-    private fun previewGrid() { content.addView(GridPreview(context, s.grid.columns, s.grid.rows), lp(-1, 180).also { it.setMargins(0, dp(12), 0, 0) }) }
-
-    private fun glassCard(head: String, body: String) {
-        val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(18)); setBackground(glassDrawable()) }
-        box.addView(TextView(context).apply { text = head; textSize = 18f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD })
-        box.addView(TextView(context).apply { text = body; textSize = 13f; setTextColor(0xDFFFFFFF.toInt()); setPadding(0, dp(8), 0, 0) })
-        content.addView(box, lp(-1, -2).also { it.setMargins(0, dp(8), 0, dp(8)) })
-    }
-
-    private fun glassDrawable() = android.graphics.drawable.GradientDrawable().apply {
-        cornerRadius = dp(s.glass.cornerRadius).toFloat()
-        setColor(Color.argb((s.glass.opacity * 2.55).roundToInt().coerceIn(80, 220), 255, 255, 255))
-        setStroke(dp(1), 0x35FFFFFF)
-    }
-
-    private fun save() { store.save(s) }
-    private fun dp(value: Int) = (value * density).roundToInt()
-    private fun lp(w: Int, h: Int) = LinearLayout.LayoutParams(if (w < 0) w else dp(w), if (h < 0) -2 else dp(h))
-}
-
-private class WallpaperBlurView(c: Context) : View(c) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val wallpaper = runCatching { WallpaperManager.getInstance(c).drawable }.getOrNull()
-    init { if (Build.VERSION.SDK_INT >= 31) setRenderEffect(RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP)) }
-    override fun onDraw(c: Canvas) {
-        wallpaper?.let { it.setBounds(0, 0, width, height); it.draw(c) }
-        paint.color = 0x8505080D.toInt()
-        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-    }
-}
-
-private class GridPreview(c: Context, private val cols: Int, private val rows: Int) : View(c) {
-    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    override fun onDraw(c: Canvas) {
-        val gap = 8f
-        val cell = (width - gap * (cols + 1)) / cols.toFloat()
-        val icon = (cell * 0.62f).coerceAtLeast(12f)
-        for (row in 0 until rows) for (col in 0 until cols) {
-            val x = gap + col * (cell + gap)
-            val y = gap + row * (height - gap * 2) / rows
-            p.color = 0x58FFFFFF
-            c.drawRoundRect(x + (cell - icon) / 2f, y + 8f, x + (cell + icon) / 2f, y + 8f + icon, icon * .28f, icon * .28f, p)
-        }
-    }
-}
-
-private class HelloWriteView(c: Context) : View(c) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val text = "hello"
-    private var progress = 0f
-    private var animator: ValueAnimator? = null
-
-    init { setLayerType(View.LAYER_TYPE_SOFTWARE, null) }
-
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 1150L
-            startDelay = 180L
-            addUpdateListener { value -> progress = value.animatedValue as Float; invalidate() }
-            start()
-        }
-    }
-
-    override fun onDetachedFromWindow() {
-        animator?.cancel()
-        animator = null
-        super.onDetachedFromWindow()
-    }
-
-    override fun onDraw(c: Canvas) {
-        val d = resources.displayMetrics.density
-        paint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        paint.textSize = 64f * d
-        paint.color = Color.WHITE
-        paint.textAlign = Paint.Align.CENTER
-        paint.setShadowLayer(16f * d, 0f, 8f * d, 0x55000000)
-
-        val charWidth = paint.measureText("hello") / text.length
-        val total = progress * text.length
-        val startX = width / 2f - paint.measureText(text) / 2f
-        for (i in text.indices) {
-            val alpha = (total - i).coerceIn(0f, 1f)
-            paint.alpha = (alpha * 255f).roundToInt()
-            c.drawText(text[i].toString(), startX + charWidth * i, height * 0.56f, paint)
-        }
-        paint.clearShadowLayer()
-
-        val cursorX = startX + charWidth * total.coerceIn(0f, text.length.toFloat())
-        paint.alpha = 190
-        paint.strokeWidth = 2f * d
-        c.drawLine(cursorX, height * 0.26f, cursorX, height * 0.70f, paint)
-        paint.alpha = 255
-    }
-}
-
-private class GlassButton(c: Context, textValue: String, click: () -> Unit) : TextView(c) {
-    init {
-        text = textValue
-        textSize = 17f
-        gravity = Gravity.CENTER
-        setTextColor(Color.WHITE)
-        typeface = Typeface.DEFAULT_BOLD
-        setBackground(android.graphics.drawable.GradientDrawable().apply { cornerRadius = 100f; setColor(0xB8FFFFFF.toInt()); setStroke(1, 0x70FFFFFF) })
-        setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { animate().scaleX(.985f).scaleY(.985f).setDuration(70L).start(); false }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { animate().scaleX(1f).scaleY(1f).setDuration(100L).start(); false }
-                else -> false
-            }
-        }
-        setOnClickListener { click() }
-    }
+    private fun title(text:String,size:Float,height:Int){body.addView(TextView(context).apply{this.text=text;textSize=size;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE);gravity=Gravity.CENTER},lp(-1,height))}
+    private fun paragraph(text:String){body.addView(TextView(context).apply{this.text=text;textSize=15f;setTextColor(0xE8FFFFFF.toInt());gravity=Gravity.CENTER;setLineSpacing(5f,1f)},lp(-1,96))}
+    private fun card(head:String,detail:String){val box=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(14),dp(18),dp(14));setBackgroundColor(0x38FFFFFF)};box.addView(TextView(context).apply{text=head;textSize=14f;letterSpacing=.08f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE)});box.addView(TextView(context).apply{text=detail;textSize=12f;setTextColor(0xCFFFFFFF.toInt());setPadding(0,dp(5),0,0)});body.addView(box,lp(-1,-2).also{it.setMargins(0,dp(5),0,dp(5))})}
+    private fun choice(head:String,detail:String,value:HomeMode){val box=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(12),dp(16),dp(12));setBackgroundColor(0x3CFFFFFF);setOnClickListener{s=s.copy(homeMode=value);store.save(s);render()}};box.addView(TextView(context).apply{text=(if(s.homeMode==value)"●  " else "○  ")+head;textSize=16f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE)});box.addView(TextView(context).apply{text=detail;textSize=11f;setTextColor(0xBFFFFFFF.toInt());setPadding(dp(24),dp(4),0,0)});body.addView(box,lp(-1,70).also{it.setMargins(0,dp(4),0,dp(4))})}
+    private fun systemCard(head:String,detail:String,onClick:()->Unit){val box=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(14),dp(18),dp(14));setBackgroundColor(0x3CFFFFFF);setOnClickListener{onClick()}};box.addView(TextView(context).apply{text=head;textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.WHITE)});box.addView(TextView(context).apply{text=detail;textSize=11f;setTextColor(0xCFFFFFFF.toInt());setPadding(0,dp(4),0,0)});body.addView(box,lp(-1,-2).also{it.setMargins(0,dp(5),0,dp(5))})}
+    private fun actionButton(text:String,onClick:()->Unit)=Button(context).apply{this.text=text;textSize=16f;setTextColor(Color.WHITE);setAllCaps(false);setBackgroundColor(0xB83B76D4.toInt());setOnClickListener{onClick()}}
+    private fun open(action:String){runCatching{context.startActivity(Intent(action))}}
+    private fun lp(w:Int,h:Int)=LinearLayout.LayoutParams(w,h)
+    private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
 }
