@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
@@ -57,13 +58,19 @@ class AetherIslandOverlay(private val service: AetherOverlayService) {
             island.setOnClickListener { toggleExpanded() }
             island.scaleX = .84f
             island.scaleY = .84f
-            SpringAnimation(island, DynamicAnimation.SCALE_X).apply { spring = spring(.8f, 1f, 620f); start() }
-            SpringAnimation(island, DynamicAnimation.SCALE_Y).apply { spring = spring(.8f, 1f, 620f); start() }
+            SpringAnimation(island, DynamicAnimation.SCALE_X).apply {
+                spring = spring(1f, 620f)
+                start()
+            }
+            SpringAnimation(island, DynamicAnimation.SCALE_Y).apply {
+                spring = spring(1f, 620f)
+                start()
+            }
             refresh()
         }
     }
 
-    private fun spring(start: Float, end: Float, stiffness: Float): SpringForce =
+    private fun spring(end: Float, stiffness: Float): SpringForce =
         SpringForce(end).apply { this.stiffness = stiffness; dampingRatio = .76f }
 
     private fun position(p: WindowManager.LayoutParams, offsetDp: Int) {
@@ -107,7 +114,10 @@ class AetherIslandOverlay(private val service: AetherOverlayService) {
                 val t = value.animatedValue as Float
                 p.width = (oldW + (width - oldW) * t).toInt()
                 p.height = (oldH + (height - oldH) * t).toInt()
-                runCatching { position(p, store.load().island.topOffset); wm.updateViewLayout(v, p) }
+                runCatching {
+                    position(p, store.load().island.topOffset)
+                    wm.updateViewLayout(v, p)
+                }
             }
             start()
         }
@@ -165,8 +175,7 @@ private class IslandView(context: android.content.Context) : View(context) {
         paint.textSize = if (active) 11f * d else 10f * d
         paint.color = 0xF2FFFFFF.toInt()
         val x = if (glyph.isNotEmpty()) 38f * d else w / 2f
-        val align = if (glyph.isNotEmpty()) Paint.Align.LEFT else Paint.Align.CENTER
-        paint.textAlign = align
+        paint.textAlign = if (glyph.isNotEmpty()) Paint.Align.LEFT else Paint.Align.CENTER
         c.drawText(if (active) activity.title.take(32) else "AETHER", x, h / 2f + 4f * d, paint)
 
         if (active && activity.detail.isNotBlank() && h > 55f * d) {
