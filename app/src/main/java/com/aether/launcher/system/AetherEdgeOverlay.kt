@@ -4,28 +4,28 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.aether.launcher.AetherHistoryStore
 import com.aether.launcher.ui.AetherSurface
+import kotlin.math.max
 
-class AetherEdgeOverlay(private val service: AetherOverlayService) {
-    private val wm = service.getSystemService(WindowManager::class.java)
-    private var root: LinearLayout? = null
-    private var panel: LinearLayout? = null
-    private fun dp(v:Int)=(v*service.resources.displayMetrics.density).toInt()
+class AetherEdgeOverlay(private val service:AetherOverlayService){
+    private val wm=service.getSystemService(WindowManager::class.java)
+    private var root:FrameLayout?=null
+    private var menu:LinearLayout?=null
+    private val d get()=service.resources.displayMetrics.density
+    private fun dp(v:Int)=(v*d).toInt()
     fun show(){
         if(root!=null||!android.provider.Settings.canDrawOverlays(service))return
-        val r=LinearLayout(service).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(6),0,dp(6),0);setBackgroundColor(Color.TRANSPARENT)}
-        val handle=TextView(service).apply{text="☰";gravity=Gravity.CENTER;textSize=16f;setTextColor(Color.WHITE);setBackgroundColor(0xCC171A20.toInt());setOnClickListener{toggle()}}
-        r.addView(handle,LinearLayout.LayoutParams(dp(44),dp(52)))
-        root=r
+        val frame=FrameLayout(service).apply{clipChildren=false;clipToPadding=false}
+        val handle=TextView(service).apply{text="☰";gravity=Gravity.CENTER;textSize=16f;setTextColor(Color.WHITE);setBackgroundColor(0xD9181B21.toInt());elevation=dp(8).toFloat();setOnClickListener{toggle()}}
+        frame.addView(handle,FrameLayout.LayoutParams(dp(48),dp(54),Gravity.CENTER_VERTICAL or Gravity.RIGHT).apply{rightMargin=dp(4)})
+        root=frame
         val type=if(Build.VERSION.SDK_INT>=26)WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
-        wm.addView(r,WindowManager.LayoutParams(dp(56),WindowManager.LayoutParams.MATCH_PARENT,type,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT).apply{gravity=Gravity.CENTER_VERTICAL or Gravity.RIGHT})
+        wm.addView(frame,WindowManager.LayoutParams(dp(300),WindowManager.LayoutParams.MATCH_PARENT,type,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT).apply{gravity=Gravity.RIGHT or Gravity.CENTER_VERTICAL})
     }
-    private fun toggle(){if(panel!=null){panel=null;root?.let{it.removeViews(1,it.childCount-1)};return};val p=LinearLayout(service).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(8));setBackgroundColor(0xEE12151A.toInt())};val items=listOf("Home","History","Notifications","Control Center","Widgets","Multitask","Settings");items.forEach{label->p.addView(TextView(service).apply{text=label;textSize=13f;setTextColor(Color.WHITE);gravity=Gravity.CENTER_VERTICAL;setPadding(dp(14),0,dp(14),0);setOnClickListener{when(label){"Home"->AetherSystemActions.launchHome(service);"History"->AetherSystemActions.openSurface(service,AetherSurface.HISTORY);"Notifications"->AetherSystemActions.openSurface(service,AetherSurface.NOTIFICATIONS);"Control Center"->AetherSystemActions.openSurface(service,AetherSurface.CONTROL);"Widgets"->AetherSystemActions.openSurface(service,AetherSurface.WIDGETS);"Multitask"->AetherSystemActions.openSurface(service,AetherSurface.MULTITASK);"Settings"->AetherSystemActions.openSettings(service)}}},LinearLayout.LayoutParams(dp(210),dp(48))) };root?.addView(p);panel=p}
-    fun hide(){root?.let{runCatching{wm.removeView(it)}};root=null;panel=null}
+    private fun toggle(){val r=root?:return;if(menu!=null){r.removeView(menu);menu=null;return};val p=LinearLayout(service).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(12),dp(12),dp(12));setBackgroundColor(0xEF12151A.toInt());elevation=dp(18).toFloat()};val items=listOf("Home" to {AetherSystemActions.launchHome(service)},"History" to {AetherSystemActions.openSurface(service,AetherSurface.HISTORY)},"Notifications" to {AetherSystemActions.openSurface(service,AetherSurface.NOTIFICATIONS)},"Control Center" to {AetherSystemActions.openSurface(service,AetherSurface.CONTROL)},"Widgets" to {AetherSystemActions.openSurface(service,AetherSurface.WIDGETS)},"Multitask" to {AetherSystemActions.openSurface(service,AetherSurface.MULTITASK)},"Quick Space" to {AetherSystemActions.openSurface(service,AetherSurface.QUICK)},"Settings" to {AetherSystemActions.openSettings(service)});items.forEach{(label,action)->p.addView(TextView(service).apply{text=label;textSize=14f;setTextColor(Color.WHITE);gravity=Gravity.CENTER_VERTICAL;setPadding(dp(16),0,dp(16),0);setOnClickListener{action()}},LinearLayout.LayoutParams(dp(248),dp(52)).apply{bottomMargin=dp(6)})};r.addView(p,FrameLayout.LayoutParams(dp(268),max(dp(8),r.height-dp(80)),Gravity.RIGHT or Gravity.TOP).apply{topMargin=dp(24);rightMargin=dp(58)});menu=p}
+    fun hide(){root?.let{runCatching{wm.removeView(it)}};root=null;menu=null}
 }
