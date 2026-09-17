@@ -1,19 +1,22 @@
 package com.aether.launcher
 
 import android.animation.ValueAnimator
+import android.app.AlertDialog
+import android.app.WallpaperManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.OvershootInterpolator
 import com.aether.launcher.engine.island.ActivityType
 import com.aether.launcher.settings.AetherSettingsStore
 import com.aether.launcher.settings.HomeMode
-import com.aether.launcher.settings.QuickEdge
 import com.aether.launcher.ui.AetherSearchActivity
 import com.aether.launcher.ui.AetherSurface
 import com.aether.launcher.ui.AetherSurfaceActivity
@@ -26,13 +29,13 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** Wallpaper-first Aether home with liquid glass + refraction on every surface. */
+/** Real wallpaper + liquid glass home. Long-press for uninstall / info / remove. */
 class AetherHomeView(context: Context) : View(context) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val settings = AetherSettingsStore(context)
     private val layout = AetherHomeLayoutStore(context)
     private val folders = AetherFolderStore(context)
-    private val dock = AetherDockStore(context)
+    private val dockStore = AetherDockStore(context)
     private val history = AetherHistoryStore(context)
     private val handler = Handler(Looper.getMainLooper())
     private val d get() = resources.displayMetrics.density
@@ -49,9 +52,22 @@ class AetherHomeView(context: Context) : View(context) {
     private var pressed: String? = null
     private var scale = 1f
     private var searchLock = false
+    private var longPressFired = false
+
+    private val wallpaperDrawable: Drawable? = runCatching {
+        WallpaperManager.getInstance(context).drawable
+    }.getOrNull()
+
+    private val longPress = Runnable {
+        val token = pressed ?: return@Runnable
+        longPressFired = true
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        showAppMenu(token)
+    }
 
     init {
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        // HARDWARE so wallpaper + glass paint correctly (software was washing everything to black)
+        setLayerType(View.LAYER_TYPE_HARDWARE, null)
         isClickable = true
         syncApps()
     }
@@ -61,7 +77,6 @@ class AetherHomeView(context: Context) : View(context) {
         syncApps()
         drawBackground(c)
         drawTop(c)
-        // Island is drawn system-wide by OverlayService; we still draw a lightweight indicator here
         drawIslandHint(c)
         drawApps(c)
         drawDock(c)
@@ -70,43 +85,56 @@ class AetherHomeView(context: Context) : View(context) {
     }
 
     private fun syncApps() {
-        apps = layout.order(AetherRuntime.registry.launcher.apps().map { it.packageName }).toMutableList()
-        page = page.coerceIn(0, pageCount() - 1)
+        val all = AetherRuntime.registry.launcher.apps().map { it.packageName }
+        apps = when (cfg.homeMode) {
+            HomeMode.DRAWER_ONLY -> mutableListOf() // empty home; drawer has everything
+            else -> layout.order(all).toMutableList()
+        }
+        page = page.coerceIn(0, max(0, pageCount() - 1))
     }
 
     private fun pageSize() = cfg.grid.columns.coerceIn(4, 9) * cfg.grid.rows.coerceIn(4, 9)
     private fun pageCount() = max(1, (apps.size + pageSize() - 1) / pageSize())
 
+    /** REAL system wallpaper, then soft atmosphere so glass reads. */
     private fun drawBackground(c: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        p.shader = LinearGradient(0f, 0f, 0f, h, 0x1A080B12, 0x3A05070B, Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, p)
-        p.shader = RadialGradient(w * 0.18f, h * 0.18f, w * 0.72f, 0x353D6E9B, 0x00000000, Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, p)
-        p.shader = RadialGradient(w * 0.88f, h * 0.70f, w * 0.65f, 0x241C6659, 0x00000000, Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, p)
-        p.shader = null
+        val wp = wallpaperDrawable
+        if (wp != null) {
+            wp.setBounds(0, 0, width, height)
+            wp.draw(c)
+            // Light dim so icons stay readable without killing the wallpaper
+            p.shader = null
+            p.color = 0x33000000
+            c.drawRect(0f, 0f, w, h, p)
+        } else {
+            p.shader = LinearGradient(0f, 0f, 0f, h, 0xFF1A2332.toInt(), 0xFF0B0F15.toInt(), Shader.TileMode.CLAMP)
+            c.drawRect(0f, 0f, w, h, p)
+            p.shader = null
+        }
     }
 
     private fun drawTop(c: Canvas) {
         p.textAlign = Paint.Align.LEFT
         p.typeface = Typeface.DEFAULT
         p.textSize = 11f * d
-        p.color = 0xBFFFFFFF.toInt()
+        p.color = 0xE6FFFFFF.toInt()
+        p.setShadowLayer(6f * d, 0f, 2f * d, 0x88000000.toInt())
         c.drawText(
             SimpleDateFormat("EEE  •  d MMM", Locale.getDefault()).format(Date()).uppercase(),
             24f * d, 42f * d, p
         )
         p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 27f * d
+        p.textSize = 34f * d
         p.color = Color.WHITE
-        c.drawText(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), 24f * d, 73f * d, p)
+        c.drawText(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), 24f * d, 82f * d, p)
+        p.clearShadowLayer()
         p.textAlign = Paint.Align.RIGHT
         p.typeface = Typeface.DEFAULT
-        p.textSize = 8f * d
-        p.letterSpacing = 0.25f
-        p.color = 0x80FFFFFF.toInt()
+        p.textSize = 9f * d
+        p.letterSpacing = 0.2f
+        p.color = 0x99FFFFFF.toInt()
         if (cfg.appearance.showAetherLabel) c.drawText("A E T H E R", width - 24f * d, 43f * d, p)
         p.letterSpacing = 0f
         p.textAlign = Paint.Align.CENTER
@@ -116,188 +144,238 @@ class AetherHomeView(context: Context) : View(context) {
         if (!cfg.island.enabled) return
         val a = AetherRuntime.registry.island.activity
         val active = a.type != ActivityType.NONE && a.title.isNotBlank()
-        val w = if (active) min(width * 0.72f, 230f * d) else min(width * 0.34f, 132f * d)
-        val h = if (active) 42f * d else 34f * d
-        val top = max(5f * d, cfg.island.topOffset * d)
-        val r = RectF(width / 2f - w / 2f, top, width / 2f + w / 2f, top + h)
-        GlassPainter.drawGlass(c, r, h / 2f, if (active) 0xCE171E27.toInt() else 0xAD11161E.toInt())
-        p.color = when (a.type) {
-            ActivityType.RECORDING -> 0xFFFF5967.toInt()
-            ActivityType.CALL -> 0xFF69F0AE.toInt()
-            ActivityType.MEDIA -> 0xFFEA80FC.toInt()
-            else -> 0xAFFFFFFF.toInt()
-        }
-        c.drawCircle(r.left + 18f * d, r.centerY(), 3.5f * d, p)
-        p.textAlign = Paint.Align.LEFT
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 10f * d
+        val w = min(width * 0.55f, 200f * d)
+        val h = 32f * d
+        val left = width / 2f - w / 2f
+        val top = max(8f * d, cfg.island.topOffset * d)
+        val r = RectF(left, top, left + w, top + h)
+        GlassPainter.drawGlass(c, r, h / 2f, if (active) 0xCC1A1F28.toInt() else 0xAA12161E.toInt())
         p.color = Color.WHITE
+        p.textSize = 11f * d
+        p.typeface = Typeface.DEFAULT_BOLD
+        p.textAlign = Paint.Align.CENTER
         c.drawText(
-            if (active) a.title.ifBlank { "Aether Activity" }.take(24) else "AETHER",
-            r.left + 28f * d, r.centerY() + 4f * d, p
+            if (active) a.title.take(22) else "AETHER",
+            width / 2f, top + h * 0.68f, p
         )
     }
 
     private fun drawApps(c: Canvas) {
+        if (cfg.homeMode == HomeMode.DRAWER_ONLY) {
+            p.color = 0xAAFFFFFF.toInt()
+            p.textSize = 14f * d
+            p.textAlign = Paint.Align.CENTER
+            c.drawText("Swipe up for App Drawer", width / 2f, height * 0.45f, p)
+            return
+        }
         val cols = cfg.grid.columns.coerceIn(4, 9)
         val rows = cfg.grid.rows.coerceIn(4, 9)
-        val left = cfg.grid.horizontalPadding * d
-        val gap = cfg.grid.horizontalSpacing * d
-        val cell = (width - left * 2f - gap * (cols - 1)) / cols
-        val top = 112f * d
-        val bottom = height - (if (cfg.dock.enabled) cfg.dock.height * d + cfg.dock.bottomPadding * d + 30f * d else 18f * d)
-        val rowGap = cfg.grid.verticalSpacing * d
-        val rowH = max(70f * d, (bottom - top - rowGap * (rows - 1)) / rows)
-        val icon = cfg.grid.iconSize.coerceIn(44, 70) * d
+        val left = 16f * d
+        val top = 110f * d
+        val bottom = height - 110f * d
+        val cellW = (width - left * 2) / cols
+        val cellH = (bottom - top) / rows
+        val icon = min(cfg.grid.iconSize * d, min(cellW, cellH) * 0.55f)
         val start = page * pageSize()
-        val end = min(apps.size, start + pageSize())
-        for (i in start until end) {
-            val token = apps[i]
-            if (token == dragging) continue
-            val local = i - start
-            val col = local % cols
-            val row = local / cols
-            val cx = left + col * (cell + gap) + cell / 2f
-            val cy = top + row * (rowH + rowGap) + icon * 0.42f
-            val s = if (pressed == token) scale else 1f
-            val r = RectF(cx - icon * s / 2f, cy - icon * s / 2f, cx + icon * s / 2f, cy + icon * s / 2f)
-            if (token.startsWith("folder:")) drawFolder(c, r, token.removePrefix("folder:"))
-            else drawIcon(c, AetherRuntime.registry.launcher.icon(token), r)
+        val slice = apps.drop(start).take(pageSize())
+
+        slice.forEachIndexed { i, token ->
+            if (token == dragging) return@forEachIndexed
+            val col = i % cols
+            val row = i / cols
+            val cx = left + col * cellW + cellW / 2f
+            val cy = top + row * cellH + cellH * 0.38f
+            val s = if (token == pressed) 0.92f else 1f
+            val size = icon * s
+            drawAppIcon(c, token, cx, cy, size)
             if (cfg.grid.showLabels) {
-                p.textAlign = Paint.Align.CENTER
+                p.color = 0xF0FFFFFF.toInt()
+                p.textSize = max(10f * d, cfg.grid.labelSize * d)
                 p.typeface = Typeface.DEFAULT
-                p.textSize = cfg.grid.labelSize.coerceIn(9, 13) * d
-                p.color = 0xF2FFFFFF.toInt()
-                c.drawText(label(token).take(14), cx, r.bottom + 15f * d, p)
+                p.textAlign = Paint.Align.CENTER
+                p.setShadowLayer(4f * d, 0f, 1f * d, 0xAA000000.toInt())
+                c.drawText(label(token).take(12), cx, cy + size / 2f + 16f * d, p)
+                p.clearShadowLayer()
             }
-            if (i == dragTarget && dragging != null) {
-                p.style = Paint.Style.STROKE
-                p.strokeWidth = 2f * d
-                p.color = 0xBFFFFFFF.toInt()
-                c.drawRoundRect(RectF(cx - icon * 0.58f, cy - icon * 0.66f, cx + icon * 0.58f, cy + icon * 0.66f), 22f * d, 22f * d, p)
-                p.style = Paint.Style.FILL
+        }
+    }
+
+    private fun drawAppIcon(c: Canvas, token: String, cx: Float, cy: Float, size: Float) {
+        val half = size / 2f
+        val r = RectF(cx - half, cy - half, cx + half, cy + half)
+        if (token.startsWith("folder:")) {
+            GlassPainter.drawGlass(c, r, size * 0.28f, 0xB01A2430.toInt())
+            p.color = Color.WHITE
+            p.textSize = size * 0.28f
+            p.textAlign = Paint.Align.CENTER
+            c.drawText("▣", cx, cy + size * 0.1f, p)
+        } else {
+            val icon = AetherRuntime.registry.launcher.icon(token)
+            if (icon != null) {
+                icon.setBounds(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
+                icon.draw(c)
+            } else {
+                GlassPainter.drawGlass(c, r, size * 0.28f, 0xA0181C24.toInt())
             }
         }
     }
 
     private fun drawDock(c: Canvas) {
         if (!cfg.dock.enabled) return
-        val bottom = height - cfg.dock.bottomPadding * d
-        val top = bottom - cfg.dock.height * d
-        val r = RectF(12f * d, top, width - 12f * d, bottom)
-        GlassPainter.drawGlass(c, r, cfg.dock.radius * d, 0xA0101722.toInt())
-        val items = (dock.favorites() + apps.filterNot { it.startsWith("folder:") })
-            .distinct()
-            .take(cfg.dock.appCount.coerceIn(4, 6))
-        if (items.isEmpty()) return
-        val slot = r.width() / items.size
-        val size = min(56f * d, r.height() * 0.72f)
-        items.forEachIndexed { i, pkg ->
-            val x = r.left + slot * (i + 0.5f)
-            drawIcon(
-                c,
-                AetherRuntime.registry.launcher.icon(pkg),
-                RectF(x - size / 2f, r.centerY() - size / 2f, x + size / 2f, r.centerY() + size / 2f)
-            )
+        val dockApps = dockStore.load().ifEmpty {
+            AetherRuntime.registry.launcher.apps().take(cfg.dock.appCount).map { it.packageName }
+        }.take(cfg.dock.appCount.coerceIn(3, 7))
+        val h = cfg.dock.height * d
+        val pad = cfg.dock.bottomPadding * d
+        val r = RectF(18f * d, height - h - pad, width - 18f * d, height - pad)
+        GlassPainter.drawGlass(c, r, cfg.dock.radius * d, 0xB0121822.toInt())
+        val cell = r.width() / max(1, dockApps.size)
+        val icon = min(48f * d, h * 0.55f)
+        dockApps.forEachIndexed { i, pkg ->
+            val cx = r.left + cell * i + cell / 2f
+            val cy = r.centerY()
+            drawAppIcon(c, pkg, cx, cy, icon)
         }
     }
 
     private fun drawHandle(c: Canvas) {
-        if (!cfg.quickSpace.enabled) return
-        val x = if (cfg.quickSpace.edge == QuickEdge.RIGHT) width - 5f * d else 5f * d
-        val r = RectF(x - 2f * d, height * 0.45f, x + 2f * d, height * 0.45f + cfg.quickSpace.handleLength * d)
-        GlassPainter.drawPill(c, r, 0xE0FFFFFF.toInt())
+        // App drawer cue
+        val y = height - 8f * d
+        p.color = 0x66FFFFFF.toInt()
+        c.drawRoundRect(RectF(width / 2f - 18f * d, y - 3f * d, width / 2f + 18f * d, y), 3f * d, 3f * d, p)
     }
 
-    private fun drawFolder(c: Canvas, r: RectF, id: String) {
-        GlassPainter.drawGlass(c, r, r.width() * 0.27f, 0xB61B2530.toInt())
-        val pkgs = folders.load().firstOrNull { it.id == id }?.packages.orEmpty().take(4)
-        val s = r.width() * 0.29f
-        pkgs.forEachIndexed { i, pkg ->
-            val x = r.left + r.width() * 0.17f + (i % 2) * (s + r.width() * 0.12f)
-            val y = r.top + r.height() * 0.17f + (i / 2) * (s + r.height() * 0.12f)
-            drawIcon(c, AetherRuntime.registry.launcher.icon(pkg), RectF(x, y, x + s, y + s))
-        }
+    private fun drawDrag(c: Canvas) {
+        val token = dragging ?: return
+        drawAppIcon(c, token, dragX, dragY, 56f * d * scale)
     }
-
-    private fun drawIcon(c: Canvas, icon: Drawable?, r: RectF) {
-        icon ?: return
-        icon.setBounds(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
-        icon.draw(c)
-    }
-
-    private fun label(token: String) =
-        if (token.startsWith("folder:"))
-            folders.load().firstOrNull { it.id == token.removePrefix("folder:") }?.name ?: "Folder"
-        else
-            AetherRuntime.registry.launcher.apps().firstOrNull { it.packageName == token }?.label ?: "App"
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                downX = e.x; downY = e.y; dragX = e.x; dragY = e.y
+                downX = e.x; downY = e.y
+                longPressFired = false
                 pressed = hit(e.x, e.y)
-                if (pressed != null) {
-                    handler.postDelayed({
-                        val token = pressed
-                        if (token != null && dragging == null) startDrag(token)
-                    }, 360)
-                }
+                handler.postDelayed(longPress, 420)
                 invalidate()
             }
             MotionEvent.ACTION_MOVE -> {
-                dragX = e.x; dragY = e.y
                 if (dragging != null) {
+                    dragX = e.x; dragY = e.y
                     dragTarget = hitIndex(e.x, e.y)
                     invalidate()
-                } else if (abs(e.x - downX) > 12f * d || abs(e.y - downY) > 12f * d) {
+                    return true
+                }
+                if (abs(e.x - downX) > 12f * d || abs(e.y - downY) > 12f * d) {
+                    handler.removeCallbacks(longPress)
+                    if (pressed != null && !longPressFired && abs(e.x - downX) + abs(e.y - downY) > 28f * d) {
+                        startDrag(pressed!!)
+                    }
                     pressed = null
-                    handler.removeCallbacksAndMessages(null)
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                handler.removeCallbacksAndMessages(null)
+                handler.removeCallbacks(longPress)
                 val dx = e.x - downX
                 val dy = e.y - downY
                 if (dragging != null) {
                     finishDrag()
+                    pressed = null
+                    invalidate()
                     return true
                 }
-                pressed = null
-                if (dy > 90f * d && abs(dy) > abs(dx) * 1.15f) {
-                    if (cfg.homeMode == HomeMode.ALL_APPS && !searchLock) {
-                        searchLock = true
-                        context.startActivity(Intent(context, AetherSearchActivity::class.java))
-                        postDelayed({ searchLock = false }, 500)
-                    }
+                if (longPressFired) {
+                    pressed = null
+                    invalidate()
                     return true
                 }
-                val edge = if (cfg.quickSpace.edge == QuickEdge.RIGHT) downX > width - 100f * d else downX < 100f * d
-                if (edge && abs(dx) > cfg.quickSpace.triggerDistance * d && abs(dx) > abs(dy) * 1.1f) {
+                // Swipe up → App Drawer
+                if (dy < -80f * d && abs(dy) > abs(dx) * 1.2f) {
+                    open(AetherSurface.DRAWER)
+                    pressed = null
+                    invalidate()
+                    return true
+                }
+                // Swipe down → Search
+                if (dy > 80f * d && abs(dy) > abs(dx) * 1.2f && e.y < height * 0.35f) {
+                    context.startActivity(Intent(context, AetherSearchActivity::class.java))
+                    pressed = null
+                    invalidate()
+                    return true
+                }
+                // Edge swipe for Quick Space
+                if (dx > 80f * d && downX < 28f * d) {
                     open(AetherSurface.QUICK)
+                    pressed = null
+                    invalidate()
                     return true
                 }
                 if (abs(dx) > 100f * d && abs(dx) > abs(dy) * 1.2f) {
                     page = (page + if (dx < 0) 1 else -1).coerceIn(0, pageCount() - 1)
+                    pressed = null
                     invalidate()
                     return true
                 }
                 if (abs(dx) < 24f * d && abs(dy) < 24f * d) {
                     if (islandHit(downX, downY)) {
                         open(AetherSurface.NOTIFICATIONS)
-                        return true
+                    } else {
+                        hit(e.x, e.y)?.let { launch(it) }
                     }
-                    hit(e.x, e.y)?.let { launch(it) }
                 }
+                pressed = null
+                invalidate()
             }
         }
         return true
     }
 
+    private fun showAppMenu(token: String) {
+        if (token.startsWith("folder:")) {
+            openFolder(token.removePrefix("folder:"))
+            return
+        }
+        val name = label(token)
+        val items = arrayOf("Open", "App info", "Uninstall", "Remove from Home", "Add to Dock")
+        AlertDialog.Builder(context)
+            .setTitle(name)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> launch(token)
+                    1 -> {
+                        val i = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        i.data = Uri.parse("package:$token")
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(i) }
+                    }
+                    2 -> {
+                        val i = Intent(Intent.ACTION_DELETE).setData(Uri.parse("package:$token"))
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(i) }
+                    }
+                    3 -> {
+                        apps.remove(token)
+                        layout.save(apps)
+                        invalidate()
+                    }
+                    4 -> {
+                        val dock = dockStore.load().toMutableList()
+                        if (token !in dock) {
+                            dock += token
+                            dockStore.save(dock.take(7))
+                        }
+                        invalidate()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun islandHit(x: Float, y: Float): Boolean {
-        val w = min(width * 0.72f, 230f * d)
-        val h = 42f * d
-        val top = max(5f * d, cfg.island.topOffset * d)
+        val w = min(width * 0.55f, 200f * d)
+        val h = 32f * d
+        val top = max(8f * d, cfg.island.topOffset * d)
         return cfg.island.enabled &&
             x in (width / 2f - w / 2f)..(width / 2f + w / 2f) &&
             y in top..(top + h)
@@ -307,7 +385,6 @@ class AetherHomeView(context: Context) : View(context) {
         dragging = token
         dragX = downX; dragY = downY
         dragTarget = apps.indexOf(token)
-        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         animateScale(1.08f)
         invalidate()
     }
@@ -347,71 +424,77 @@ class AetherHomeView(context: Context) : View(context) {
     }
 
     private fun hitIndex(x: Float, y: Float): Int {
+        if (cfg.homeMode == HomeMode.DRAWER_ONLY) return -1
         val cols = cfg.grid.columns.coerceIn(4, 9)
-        val left = cfg.grid.horizontalPadding * d
-        val gap = cfg.grid.horizontalSpacing * d
-        val cell = (width - left * 2f - gap * (cols - 1)) / cols
-        val top = 112f * d
-        val bottom = height - (if (cfg.dock.enabled) cfg.dock.height * d + cfg.dock.bottomPadding * d + 30f * d else 18f * d)
         val rows = cfg.grid.rows.coerceIn(4, 9)
-        val rowGap = cfg.grid.verticalSpacing * d
-        val rowH = max(70f * d, (bottom - top - rowGap * (rows - 1)) / rows)
-        val col = ((x - left) / (cell + gap)).toInt()
-        val row = ((y - top) / (rowH + rowGap)).toInt()
-        if (col !in 0 until cols || row !in 0 until rows) return -1
-        val i = page * pageSize() + row * cols + col
-        return if (i in apps.indices) i else -1
+        val left = 16f * d
+        val top = 110f * d
+        val bottom = height - 110f * d
+        val cellW = (width - left * 2) / cols
+        val cellH = (bottom - top) / rows
+        if (x < left || x > width - left || y < top || y > bottom) return -1
+        val col = ((x - left) / cellW).toInt().coerceIn(0, cols - 1)
+        val row = ((y - top) / cellH).toInt().coerceIn(0, rows - 1)
+        val idx = page * pageSize() + row * cols + col
+        return if (idx in apps.indices) idx else -1
     }
 
     private fun hitDock(x: Float, y: Float): String? {
         if (!cfg.dock.enabled) return null
-        val bottom = height - cfg.dock.bottomPadding * d
-        val top = bottom - cfg.dock.height * d
-        if (y !in top..bottom) return null
-        val r = RectF(12f * d, top, width - 12f * d, bottom)
-        val items = (dock.favorites() + apps.filterNot { it.startsWith("folder:") })
-            .distinct()
-            .take(cfg.dock.appCount.coerceIn(4, 6))
-        if (items.isEmpty()) return null
-        return items.getOrNull(((x - r.left) / (r.width() / items.size)).toInt())
+        val dockApps = dockStore.load().ifEmpty {
+            AetherRuntime.registry.launcher.apps().take(cfg.dock.appCount).map { it.packageName }
+        }.take(cfg.dock.appCount)
+        val h = cfg.dock.height * d
+        val pad = cfg.dock.bottomPadding * d
+        val top = height - h - pad
+        if (y < top || y > height - pad) return null
+        val cell = (width - 36f * d) / max(1, dockApps.size)
+        val idx = ((x - 18f * d) / cell).toInt()
+        return dockApps.getOrNull(idx)
     }
 
-    private fun animateScale(target: Float) {
-        ValueAnimator.ofFloat(scale, target).apply {
+    private fun launch(token: String) {
+        if (token.startsWith("folder:")) {
+            openFolder(token.removePrefix("folder:"))
+            return
+        }
+        history.record(token)
+        AetherRuntime.registry.launcher.launch(token)
+    }
+
+    private fun openFolder(id: String) {
+        context.startActivity(
+            Intent(context, AetherSurfaceActivity::class.java)
+                .putExtra("surface", AetherSurface.FOLDER)
+                .putExtra("folder_id", id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+
+    private fun open(surface: String) {
+        context.startActivity(
+            Intent(context, AetherSurfaceActivity::class.java)
+                .putExtra("surface", surface)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+
+    private fun label(token: String): String {
+        if (token.startsWith("folder:")) {
+            return folders.load().firstOrNull { it.id == token.removePrefix("folder:") }?.name ?: "Folder"
+        }
+        return AetherRuntime.registry.launcher.apps().firstOrNull { it.packageName == token }?.label ?: token
+    }
+
+    private fun animateScale(end: Float) {
+        ValueAnimator.ofFloat(scale, end).apply {
             duration = 180
-            interpolator = OvershootInterpolator(1.1f)
+            interpolator = OvershootInterpolator()
             addUpdateListener {
                 scale = it.animatedValue as Float
                 invalidate()
             }
             start()
         }
-    }
-
-    private fun drawDrag(c: Canvas) {
-        val token = dragging ?: return
-        val s = cfg.grid.iconSize.coerceIn(48, 72) * d
-        val r = RectF(dragX - s / 2f, dragY - s / 2f, dragX + s / 2f, dragY + s / 2f)
-        GlassPainter.drawGlass(c, r, 24f * d, 0xD61A2430.toInt())
-        if (token.startsWith("folder:"))
-            drawFolder(c, RectF(r.left + 7, r.top + 7, r.right - 7, r.bottom - 7), token.removePrefix("folder:"))
-        else
-            drawIcon(c, AetherRuntime.registry.launcher.icon(token), RectF(r.left + 7, r.top + 7, r.right - 7, r.bottom - 7))
-    }
-
-    private fun launch(token: String) {
-        if (token.startsWith("folder:")) {
-            open(AetherSurface.FOLDER, token.removePrefix("folder:"))
-            return
-        }
-        history.record(token)
-        AetherRuntime.registry.launcher.launchIntent(token)?.let { context.startActivity(it) }
-    }
-
-    private fun open(surface: String, folderId: String? = null) {
-        context.startActivity(Intent(context, AetherSurfaceActivity::class.java).apply {
-            putExtra("surface", surface)
-            if (folderId != null) putExtra("folder_id", folderId)
-        })
     }
 }
