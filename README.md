@@ -21,38 +21,48 @@ UI
 ## Phase Status
 
 ### Phase 1 — Complete
-| Engine / System | Status |
-|-----------------|--------|
-| Launcher Engine | Real PackageManager discovery + launch |
-| Layout / Dock / Folder | Working with persistence |
-| Glass / Material | RenderEffect blur (API 31+) + refraction painter |
-| Physics / Animation | SpringAnimation helpers |
-| Island / Activity | System-wide overlay, cutout-aware |
-| Notification Engine | Listener + RemoteInput reply bridge |
-| Security / App Lock | Biometric + glass passcode surface |
-| Overlay Service | Island + Quick Space over every app |
-| Persistence | Settings, layout, folders, dock, protected apps |
-| Boot Supervisor | BootReceiver + health start |
+Launcher, glass + refraction, Island, Quick Space (system-wide), Notification reply, Security, Boot, Overlay service.
 
 ### Phase 2 — Complete
+Media/call/download sensing, Control Center glass UI, full Setup Wizard (hello → finish), system-wide Island + Quick Space.
+
+### Phase 3 — Complete
 | Feature | Status |
 |---------|--------|
-| Media / Call / Download sensing | Aggressive classification from NotificationListener |
-| Island activity types | MEDIA, CALL, DOWNLOAD, RECORDING, TIMER, NOTIFICATION, CHARGING, SYSTEM |
-| Quick Reply | Real RemoteInput, stays until notification changes |
-| Control Center | Glass cards, media, Wi-Fi/BT, circular toggles, brightness/volume sliders |
-| Setup Wizard | Hello → Home mode → Grid → Island/Quick → Permissions → Finish |
-| Refraction glass | Shared GlassPainter on Home, Dock, Island, Control, Setup |
-| System-wide Island + Quick Space | OverlayService sticky, started from Activity + Boot |
+| Safe PIN persistence | SHA-256 + salt, never plaintext; set on first lock |
+| Session unlock cache | In-memory only; cleared on screen-off |
+| Face + Fingerprint icons | Bottom of lock screen; tap → biometric prompt |
+| App icon | Adaptive + legacy vector icon |
+| Multitasking | Split + freeform via public ActivityOptions bounds |
+| Performance engine | Scales blur/animation by real memory class |
+| Signing | CI uses AETHER_KEYSTORE_* env/secrets |
 
-## Build
+## Build & sign
+
+CI (`.github/workflows/build-apk.yml`) expects:
+
+```
+AETHER_KEYSTORE_BASE64
+AETHER_KEYSTORE_PASSWORD
+AETHER_KEY_ALIAS
+AETHER_KEY_PASSWORD
+```
+
+Locally:
+
 ```bash
+export AETHER_KEYSTORE_PATH=aether-release.keystore
+export AETHER_KEYSTORE_PASSWORD=...
+export AETHER_KEY_ALIAS=...
+export AETHER_KEY_PASSWORD=...
 ./gradlew assembleRelease
 ```
-Requires the stable release keystore secrets for CI.
 
-## Permissions required for full experience
-1. Display over other apps (Island + Quick Space)
-2. Notification access (live activities + reply)
-3. Default Home (optional but recommended)
+APK: `app/build/outputs/apk/release/app-release.apk`
+
+## Permissions for full experience
+1. Display over other apps
+2. Notification access
+3. Default Home (recommended)
 4. Accessibility (App Lock)
+5. Biometric / device credential
