@@ -14,8 +14,7 @@ import com.aether.launcher.AetherRuntime
 
 /**
  * Persistent system interaction layer.
- * Starts Dynamic Island + Quick Space edge overlays so they appear over any app
- * (when overlay permission is granted).
+ * Island + Quick Space over any app when overlay permission is granted.
  */
 class AetherOverlayService : Service() {
 
@@ -26,7 +25,10 @@ class AetherOverlayService : Service() {
     private val refresher = object : Runnable {
         override fun run() {
             runCatching { islandOverlay?.refresh() }
-            handler.postDelayed(this, 220L)
+            val delay = if (AetherRuntime.isInitialized()) {
+                AetherRuntime.registry.performance.profile().maxOverlayRefreshMs
+            } else 220L
+            handler.postDelayed(this, delay)
         }
     }
 
@@ -73,6 +75,7 @@ class AetherOverlayService : Service() {
             AetherRuntime.initialize(applicationContext)
             islandOverlay = AetherNotificationIslandOverlay(this).also { it.show() }
             edgeOverlay = AetherEdgeOverlay(this).also { it.show() }
+            MediaSessionBridge.start(applicationContext)
             handler.post(refresher)
         }
     }
@@ -85,6 +88,7 @@ class AetherOverlayService : Service() {
     override fun onDestroy() {
         current = null
         handler.removeCallbacksAndMessages(null)
+        MediaSessionBridge.stop(applicationContext)
         islandOverlay?.hide()
         edgeOverlay?.hide()
         islandOverlay = null

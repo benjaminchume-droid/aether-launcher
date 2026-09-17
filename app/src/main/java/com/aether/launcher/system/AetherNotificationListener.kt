@@ -9,14 +9,13 @@ import com.aether.launcher.engine.island.IslandActivity
 import com.aether.launcher.engine.notification.AetherNotification
 
 /**
- * Real notification bridge.
- * Aggressively maps call / media / progress / recording notifications into the Island
- * so the capsule appears over any app, not only Home.
+ * Real notification bridge + privacy-aware redaction for locked apps.
  */
 class AetherNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         AetherRuntime.initialize(applicationContext)
+        MediaSessionBridge.start(applicationContext)
         activeNotifications?.forEach(::ingest)
     }
 
@@ -29,7 +28,6 @@ class AetherNotificationListener : NotificationListenerService() {
 
         val cur = AetherRuntime.registry.island.activity
         if (cur.key == keyFor(sbn)) {
-            // Fall back to next highest-priority live notification
             val next = AetherRuntime.registry.notifications.latest()
             if (next != null) {
                 AetherRuntime.registry.island.setActivity(
@@ -53,11 +51,19 @@ class AetherNotificationListener : NotificationListenerService() {
         if (!AetherRuntime.isInitialized()) AetherRuntime.initialize(applicationContext)
 
         val n = sbn.notification
-        val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val text = n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        var title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        var text = n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         val sub = n.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty()
         val progress = n.extras.getInt(Notification.EXTRA_PROGRESS, -1)
         val progressMax = n.extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
+
+        // Privacy: redact content from protected apps that are not session-unlocked
+        val protected = AetherRuntime.security.isProtected(sbn.packageName)
+        val unlocked = AetherRuntime.security.isUnlocked(sbn.packageName)
+        if (protected && !unlocked) {
+            title = packageLabel(sbn.packageName)
+            text = "Locked notification"
+        }
 
         val type = when {
             n.category == Notification.CATEGORY_CALL -> ActivityType.CALL
@@ -82,7 +88,9 @@ class AetherNotificationListener : NotificationListenerService() {
         AetherRuntime.registry.notifications.add(
             AetherNotification(sbn.id, sbn.packageName, title, text, sbn.postTime)
         )
-        NotificationReplyBridge.remember(sbn)
+        if (!(protected && !unlocked)) {
+            NotificationReplyBridge.remember(sbn)
+        }
 
         val priority = when (type) {
             ActivityType.CALL -> 90
@@ -93,7 +101,6 @@ class AetherNotificationListener : NotificationListenerService() {
             else -> 20
         }
 
-        // Only override if higher or equal priority, or same key
         val current = AetherRuntime.registry.island.activity
         if (current.key == key || priority >= current.priority || current.type == ActivityType.NONE) {
             AetherRuntime.registry.island.setActivity(

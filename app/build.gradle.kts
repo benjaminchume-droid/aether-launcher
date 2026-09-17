@@ -20,8 +20,8 @@ android {
         applicationId = "com.aetherlaucher.glassline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.6.1"
+        versionCode = 9
+        versionName = "0.7.0"
     }
 
     signingConfigs {
@@ -41,7 +41,6 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = false
-            // Never assign null — use release when secrets exist, otherwise debug signing
             signingConfig = if (releaseSigningReady) {
                 signingConfigs.getByName("release")
             } else {
