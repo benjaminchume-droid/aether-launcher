@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Soft glass orb -->
+    <path
+        android:fillColor="#E8FFFFFF"
+        android:pathData="M54,28c14.4,0 26,11.6 26,26s-11.6,26 -26,26 -26,-11.6 -26,-26 11.6,-26 26,-26z" />
+    <!-- Inner highlight -->
+    <path
+        android:fillColor="#66FFFFFF"
+        android:pathData="M54,34c10.5,0 19,8.5 19,19s-8.5,19 -19,19 -19,-8.5 -19,-19 8.5,-19 19,-19z" />
+    <!-- Core accent -->
+    <path
+        android:fillColor="#5B8FEA"
+        android:pathData="M54,44c5.5,0 10,4.5 10,10s-4.5,10 -10,10 -10,-4.5 -10,-10 4.5,-10 10,-10z" />
+    <!-- Tiny A mark -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,48 L58,60 L55.5,60 L54.7,57.5 L53.3,57.5 L52.5,60 L50,60 Z M53.7,55.5 L54.3,55.5 L54,54.2 Z" />
+</vector>

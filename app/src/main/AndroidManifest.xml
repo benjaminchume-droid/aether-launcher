@@ -6,10 +6,29 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <application android:theme="@style/Theme.Aether" android:label="Aether Launcher" android:allowBackup="false" android:supportsRtl="true">
-        <activity android:name=".AetherActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
-            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+
+    <application
+        android:theme="@style/Theme.Aether"
+        android:label="Aether Launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".AetherActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
         <activity android:name=".settings.AetherSettingsActivity" android:exported="false" android:label="Aether Settings" />
         <activity android:name=".system.AetherAppLockActivity" android:exported="false" android:label="Aether App Lock" />
         <activity android:name=".system.NotificationSettingsActivity" android:exported="false" android:label="Aether Notifications" />
@@ -17,24 +36,54 @@
         <activity android:name=".ui.AetherSearchActivity" android:exported="false" android:label="Aether Search" />
         <activity android:name=".ui.AetherWidgetHostActivity" android:exported="false" android:label="Aether Widgets" />
         <activity android:name=".ui.AetherToolsActivity" android:exported="false" android:label="Aether Tools" />
-        <activity android:name=".system.LockActivity" android:exported="false" android:excludeFromRecents="true" android:launchMode="singleTop" />
-        <service android:name=".system.AetherOverlayService" android:exported="false" android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Aether persistent interaction and security overlay" />
+        <activity
+            android:name=".system.LockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Aether" />
+
+        <service
+            android:name=".system.AetherOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Aether persistent interaction and security overlay" />
         </service>
-        <service android:name=".system.AetherNotificationListener" android:label="Aether Notifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
-            <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
-        </service>
-        <service android:name=".system.AetherAccessibilityService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="false">
-            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter>
-            <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_config"/>
-        </service>
-        <receiver android:name=".system.BootReceiver" android:exported="true" android:directBootAware="true">
+
+        <service
+            android:name=".system.AetherNotificationListener"
+            android:label="Aether Notifications"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.POWER_CONNECTED"/>
-                <action android:name="android.intent.action.POWER_DISCONNECTED"/>
-                <action android:name="android.intent.action.SCREEN_OFF"/>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".system.AetherAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config" />
+        </service>
+
+        <receiver
+            android:name=".system.BootReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.POWER_CONNECTED" />
+                <action android:name="android.intent.action.POWER_DISCONNECTED" />
+                <action android:name="android.intent.action.SCREEN_OFF" />
             </intent-filter>
         </receiver>
     </application>
