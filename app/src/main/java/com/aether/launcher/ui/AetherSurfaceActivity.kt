@@ -7,7 +7,7 @@ import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import com.aether.launcher.AetherRuntime
 
-/** Surfaces (Quick Space, Drawer, Control, etc.) sit on real wallpaper. */
+/** All secondary surfaces (Quick, Drawer, Control, Settings path) on real wallpaper. */
 class AetherSurfaceActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)

@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.graphics.drawable.Drawable
-import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
@@ -33,22 +32,7 @@ object AetherSurface {
     const val ABOUT = "about"
 }
 
-class AetherSurfaceActivity : Activity() {
-    override fun onCreate(b: Bundle?) {
-        super.onCreate(b)
-        AetherRuntime.initialize(applicationContext)
-        val root = AetherGlassRoot(this)
-        root.attach(
-            AetherSurfaceView(
-                this,
-                intent.getStringExtra("surface") ?: AetherSurface.DRAWER,
-                intent.getStringExtra("folder_id")
-            )
-        )
-        setContentView(root)
-    }
-}
-
+/** Draws glass UI with transparent background so wallpaper shows through. */
 class AetherSurfaceView(
     c: Context,
     private val surface: String,
@@ -62,24 +46,25 @@ class AetherSurfaceView(
     private val folders = AetherFolderStore(c)
     private var downX = 0f
     private var downY = 0f
-
-    // Control Center interactive state
     private var brightnessTouch = false
     private var volumeTouch = false
 
+    init {
+        setBackgroundColor(Color.TRANSPARENT)
+    }
+
     override fun onDraw(c: Canvas) {
         val w = width.toFloat()
-        val h = height.toFloat()
-        p.shader = LinearGradient(0f, 0f, 0f, h, 0x18050A10, 0x08050A10, Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, p)
-        p.shader = null
+        // Light dim only — wallpaper from FLAG_SHOW_WALLPAPER / GlassRoot stays visible
+        p.color = 0x33000000
+        c.drawRect(0f, 0f, w, height.toFloat(), p)
 
         when (surface) {
             AetherSurface.QUICK -> quick(c, w)
             AetherSurface.DRAWER -> drawer(c, w)
             AetherSurface.FOLDER -> folder(c, w)
             AetherSurface.HISTORY -> history(c, w)
-            AetherSurface.CONTROL -> control(c, w, h)
+            AetherSurface.CONTROL -> control(c, w, height.toFloat())
             AetherSurface.NOTIFICATIONS -> notifications(c, w)
             AetherSurface.MULTITASK -> multi(c, w)
             AetherSurface.WIDGETS -> widgets(c, w)
@@ -90,22 +75,24 @@ class AetherSurfaceView(
     private fun header(c: Canvas, title: String, sub: String) {
         p.textAlign = Paint.Align.LEFT
         p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 31f * d
+        p.textSize = 28f * d
         p.color = Color.WHITE
-        c.drawText(title, 24f * d, 70f * d, p)
+        p.setShadowLayer(10f * d, 0f, 3f * d, 0xAA000000.toInt())
+        c.drawText(title, 24f * d, 72f * d, p)
         p.typeface = Typeface.DEFAULT
         p.textSize = 12f * d
-        p.color = 0xBFFFFFFF.toInt()
+        p.color = 0xE0FFFFFF.toInt()
         c.drawText(sub, 24f * d, 94f * d, p)
+        p.clearShadowLayer()
         p.textAlign = Paint.Align.CENTER
     }
 
-    private fun glass(c: Canvas, r: RectF, rad: Float, base: Int = 0xA9161B23.toInt()) {
+    private fun glass(c: Canvas, r: RectF, rad: Float, base: Int = 0xB0161B23.toInt()) {
         GlassPainter.drawGlass(c, r, rad, base)
     }
 
     private fun tile(c: Canvas, r: RectF, title: String, detail: String = "", accent: Boolean = false) {
-        glass(c, r, min(24f * d, r.height() * 0.28f), if (accent) 0xB34C83D8.toInt() else 0x9D151A22.toInt())
+        glass(c, r, min(22f * d, r.height() * 0.3f), if (accent) 0xC04C83D8.toInt() else 0xB0151A22.toInt())
         p.textAlign = Paint.Align.LEFT
         p.typeface = Typeface.DEFAULT_BOLD
         p.textSize = 15f * d
@@ -113,9 +100,9 @@ class AetherSurfaceView(
         c.drawText(title, r.left + 16f * d, r.top + 28f * d, p)
         if (detail.isNotBlank()) {
             p.typeface = Typeface.DEFAULT
-            p.textSize = 10f * d
-            p.color = 0xBFFFFFFF.toInt()
-            c.drawText(detail.take(32), r.left + 16f * d, r.top + 47f * d, p)
+            p.textSize = 11f * d
+            p.color = 0xCCFFFFFF.toInt()
+            c.drawText(detail.take(28), r.left + 16f * d, r.top + 48f * d, p)
         }
         p.textAlign = Paint.Align.CENTER
     }
@@ -127,243 +114,166 @@ class AetherSurfaceView(
         }
     }
 
-    // ─── Control Center (matches reference glass cards + sliders + circular toggles) ───
-
-    private fun control(c: Canvas, w: Float, h: Float) {
-        AetherRuntime.registry.controlCenter.refresh()
-        val st = AetherRuntime.registry.controlCenter.controls
-
-        // Media card (top-left, large)
-        val mediaR = RectF(18f * d, 48f * d, w * 0.52f - 6f * d, 168f * d)
-        glass(c, mediaR, 26f * d, 0xB0181C26.toInt())
-        p.textAlign = Paint.Align.LEFT
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 13f * d
-        p.color = Color.WHITE
-        c.drawText(st.mediaTitle.take(18).ifBlank { "Not Playing" }, mediaR.left + 18f * d, mediaR.top + 36f * d, p)
-        p.typeface = Typeface.DEFAULT
-        p.textSize = 11f * d
-        p.color = 0xAAFFFFFF.toInt()
-        c.drawText(st.mediaArtist.take(20), mediaR.left + 18f * d, mediaR.top + 54f * d, p)
-
-        // Media transport
-        p.color = 0xEEFFFFFF.toInt()
-        p.textSize = 22f * d
-        p.textAlign = Paint.Align.CENTER
-        c.drawText("⏮  ▶  ⏭", mediaR.centerX(), mediaR.bottom - 28f * d, p)
-
-        // WiFi + Bluetooth stacked (top-right)
-        val wifiR = RectF(w * 0.52f + 6f * d, 48f * d, w - 18f * d, 102f * d)
-        glass(c, wifiR, 22f * d, 0xA0181C26.toInt())
-        p.textAlign = Paint.Align.LEFT
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 14f * d
-        p.color = Color.WHITE
-        c.drawText("Wi-Fi", wifiR.left + 16f * d, wifiR.centerY() + 5f * d, p)
-        p.textAlign = Paint.Align.RIGHT
-        p.textSize = 11f * d
-        p.color = 0xAAFFFFFF.toInt()
-        c.drawText(if (st.wifi) "On" else "Off", wifiR.right - 16f * d, wifiR.centerY() + 5f * d, p)
-
-        val btR = RectF(w * 0.52f + 6f * d, 110f * d, w - 18f * d, 164f * d)
-        glass(c, btR, 22f * d, 0xA0181C26.toInt())
-        p.textAlign = Paint.Align.LEFT
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 14f * d
-        p.color = Color.WHITE
-        c.drawText("Bluetooth", btR.left + 16f * d, btR.centerY() + 5f * d, p)
-        p.textAlign = Paint.Align.RIGHT
-        p.textSize = 11f * d
-        p.color = 0xAAFFFFFF.toInt()
-        c.drawText(if (st.bluetooth) "On" else "Off", btR.right - 16f * d, btR.centerY() + 5f * d, p)
-
-        // Circular toggles row
-        val toggleY = 188f * d
-        val toggleSize = 56f * d
-        val toggles = listOf(
-            Triple("💡", st.torch, "Torch"),
-            Triple("↻", st.rotation, "Rotate"),
-            Triple("🔕", st.dnd, "Focus"),
-            Triple("✈", st.airplane, "Air")
-        )
-        val totalW = toggles.size * toggleSize + (toggles.size - 1) * 14f * d
-        var tx = (w - totalW) / 2f
-        toggles.forEach { (glyph, on, _) ->
-            val r = RectF(tx, toggleY, tx + toggleSize, toggleY + toggleSize)
-            glass(c, r, toggleSize / 2f, if (on) 0xC03D7EFF.toInt() else 0xA0181C26.toInt())
-            p.textAlign = Paint.Align.CENTER
-            p.textSize = 20f * d
-            p.color = Color.WHITE
-            c.drawText(glyph, r.centerX(), r.centerY() + 7f * d, p)
-            tx += toggleSize + 14f * d
-        }
-
-        // Brightness slider (tall glass card)
-        val brightR = RectF(18f * d, 262f * d, 72f * d, 420f * d)
-        glass(c, brightR, 28f * d, 0xA0181C26.toInt())
-        val fillH = brightR.height() * st.brightness
-        p.color = 0x66FFFFFF.toInt()
-        c.drawRoundRect(
-            RectF(brightR.left + 4f * d, brightR.bottom - fillH, brightR.right - 4f * d, brightR.bottom - 4f * d),
-            20f * d, 20f * d, p
-        )
-        p.color = Color.WHITE
-        p.textSize = 18f * d
-        p.textAlign = Paint.Align.CENTER
-        c.drawText("☀", brightR.centerX(), brightR.bottom - 22f * d, p)
-
-        // Volume slider
-        val volR = RectF(86f * d, 262f * d, 140f * d, 420f * d)
-        glass(c, volR, 28f * d, 0xA0181C26.toInt())
-        val volH = volR.height() * st.volume
-        p.color = 0x66FFFFFF.toInt()
-        c.drawRoundRect(
-            RectF(volR.left + 4f * d, volR.bottom - volH, volR.right - 4f * d, volR.bottom - 4f * d),
-            20f * d, 20f * d, p
-        )
-        p.color = Color.WHITE
-        p.textSize = 18f * d
-        c.drawText("🔊", volR.centerX(), volR.bottom - 22f * d, p)
-
-        // Quick action grid (bottom)
-        val actions = listOf(
-            "Flashlight", "Timer", "Calc", "Camera",
-            "Screen", "Hotspot", "QR", "Record"
-        )
-        val cell = 64f * d
-        val gap = 12f * d
-        val startX = 158f * d
-        actions.forEachIndexed { i, label ->
-            val col = i % 4
-            val row = i / 4
-            val x = startX + col * (cell + gap)
-            val y = 262f * d + row * (cell + gap)
-            val r = RectF(x, y, x + cell, y + cell)
-            glass(c, r, 20f * d, 0xA0181C26.toInt())
-            p.textAlign = Paint.Align.CENTER
-            p.typeface = Typeface.DEFAULT
-            p.textSize = 10f * d
-            p.color = 0xEEFFFFFF.toInt()
-            c.drawText(label, r.centerX(), r.centerY() + 4f * d, p)
-        }
-    }
-
-    // ─── Other surfaces (kept functional) ───
-
-    private fun drawer(c: Canvas, w: Float) {
-        header(c, "All Apps", "Every installed launcher app • swipe down for search")
-        val list = apps
-        val cols = 4
-        val gap = 10f * d
-        val left = 18f * d
-        val top = 126f * d
-        val cell = (w - left * 2 - gap * (cols - 1)) / cols
-        val size = min(52f * d, cell * 0.58f)
-        list.take(60).forEachIndexed { i, a ->
-            val col = i % cols
-            val row = i / cols
-            val x = left + col * (cell + gap)
-            val y = top + row * 84f * d
-            glass(c, RectF(x, y, x + cell, y + 70f * d), 20f * d, 0x74141920.toInt())
-            icon(c, a.packageName, RectF(x + cell / 2 - size / 2, y + 8f * d, x + cell / 2 + size / 2, y + 8f * d + size))
-            p.textAlign = Paint.Align.CENTER
-            p.textSize = 9f * d
-            p.color = 0xE8FFFFFF.toInt()
-            p.typeface = Typeface.DEFAULT
-            c.drawText(a.label.take(11), x + cell / 2, y + 64f * d, p)
-        }
-    }
-
     private fun quick(c: Canvas, w: Float) {
-        header(c, "Quick Space", "Tools that bloom from the edge • no empty white screen")
+        header(c, "Quick Space", "Notes, tools, recents — over your wallpaper")
         val items = listOf(
-            "Notes" to "Capture something",
+            "Notes" to "Write something",
             "Voice" to "Record audio",
-            "Calculator" to "Fast math",
-            "Screenshot" to "System permission",
-            "Clipboard" to "Recent copied text",
-            "Recent Apps" to "Return to work",
-            "Widgets" to "Live widgets",
-            "Settings" to "Aether controls"
+            "Calculator" to "Quick math",
+            "Clipboard" to "Paste board",
+            "Recent Apps" to "Jump back",
+            "Control Center" to "Toggles & media",
+            "Widgets" to "Home widgets",
+            "Settings" to "Aether settings"
         )
         val gap = 12f * d
-        val left = 18f * d
+        val left = 16f * d
         val cell = (w - left * 2 - gap) / 2f
         items.forEachIndexed { i, (name, detail) ->
             val col = i % 2
             val row = i / 2
             val x = left + col * (cell + gap)
-            val y = 122f * d + row * 72f * d
-            tile(c, RectF(x, y, x + cell, y + 58f * d), name, detail, i == 0)
+            val y = 118f * d + row * 76f * d
+            tile(c, RectF(x, y, x + cell, y + 64f * d), name, detail, i == 0)
         }
     }
 
+    private fun drawer(c: Canvas, w: Float) {
+        header(c, "All Apps", "${apps.size} installed • swipe down to close")
+        val list = apps
+        val cols = 4
+        val gap = 10f * d
+        val left = 16f * d
+        val top = 120f * d
+        val cell = (w - left * 2 - gap * (cols - 1)) / cols
+        val size = min(52f * d, cell * 0.58f)
+        list.take(80).forEachIndexed { i, a ->
+            val col = i % cols
+            val row = i / cols
+            val x = left + col * (cell + gap)
+            val y = top + row * 88f * d
+            glass(c, RectF(x, y, x + cell, y + 76f * d), 20f * d, 0x99141920.toInt())
+            icon(c, a.packageName, RectF(x + cell / 2 - size / 2, y + 8f * d, x + cell / 2 + size / 2, y + 8f * d + size))
+            p.textAlign = Paint.Align.CENTER
+            p.textSize = 10f * d
+            p.color = 0xF0FFFFFF.toInt()
+            c.drawText(a.label.take(10), x + cell / 2, y + 70f * d, p)
+        }
+    }
+
+    private fun control(c: Canvas, w: Float, h: Float) {
+        AetherRuntime.registry.controlCenter.refresh()
+        val st = AetherRuntime.registry.controlCenter.controls
+        header(c, "Control Center", "Live system controls")
+
+        val mediaR = RectF(16f * d, 110f * d, w * 0.52f - 6f * d, 220f * d)
+        glass(c, mediaR, 24f * d, 0xB0181C26.toInt())
+        p.textAlign = Paint.Align.LEFT
+        p.typeface = Typeface.DEFAULT_BOLD
+        p.textSize = 14f * d
+        p.color = Color.WHITE
+        c.drawText(st.mediaTitle.take(18).ifBlank { "Not Playing" }, mediaR.left + 16f * d, mediaR.top + 36f * d, p)
+        p.typeface = Typeface.DEFAULT
+        p.textSize = 12f * d
+        p.color = 0xAAFFFFFF.toInt()
+        c.drawText(st.mediaArtist.take(20), mediaR.left + 16f * d, mediaR.top + 56f * d, p)
+        p.textAlign = Paint.Align.CENTER
+        p.color = Color.WHITE
+        p.textSize = 22f * d
+        c.drawText("\u23EE  \u25B6  \u23ED", mediaR.centerX(), mediaR.bottom - 28f * d, p)
+
+        glass(c, RectF(w * 0.52f + 6f * d, 110f * d, w - 16f * d, 160f * d), 20f * d)
+        p.textAlign = Paint.Align.LEFT
+        p.textSize = 14f * d
+        p.color = Color.WHITE
+        c.drawText("Wi-Fi", w * 0.52f + 20f * d, 142f * d, p)
+
+        glass(c, RectF(w * 0.52f + 6f * d, 170f * d, w - 16f * d, 220f * d), 20f * d)
+        c.drawText("Bluetooth", w * 0.52f + 20f * d, 202f * d, p)
+
+        val toggleY = 240f * d
+        val toggleSize = 56f * d
+        listOf(st.torch to "Torch", st.rotation to "Rotate", st.dnd to "Focus", st.airplane to "Air")
+            .forEachIndexed { i, (on, _) ->
+                val x = 16f * d + i * (toggleSize + 14f * d)
+                glass(c, RectF(x, toggleY, x + toggleSize, toggleY + toggleSize), toggleSize / 2f,
+                    if (on) 0xC03D7EFF.toInt() else 0xA0181C26.toInt())
+            }
+
+        val brightR = RectF(16f * d, 316f * d, 70f * d, 460f * d)
+        glass(c, brightR, 26f * d)
+        p.color = 0x66FFFFFF.toInt()
+        val fillH = brightR.height() * st.brightness
+        c.drawRoundRect(RectF(brightR.left + 4f * d, brightR.bottom - fillH, brightR.right - 4f * d, brightR.bottom - 4f * d), 18f * d, 18f * d, p)
+
+        val volR = RectF(84f * d, 316f * d, 138f * d, 460f * d)
+        glass(c, volR, 26f * d)
+        val volH = volR.height() * st.volume
+        c.drawRoundRect(RectF(volR.left + 4f * d, volR.bottom - volH, volR.right - 4f * d, volR.bottom - 4f * d), 18f * d, 18f * d, p)
+    }
+
     private fun history(c: Canvas, w: Float) {
-        header(c, "Recent", "Your actual launch history")
-        val list = history.load().mapNotNull { e ->
-            apps.firstOrNull { it.packageName == e.packageName }
-        }.distinctBy { it.packageName }.take(12)
+        header(c, "Recent", "Your launch history")
+        val list = history.load().mapNotNull { e -> apps.firstOrNull { it.packageName == e.packageName } }
+            .distinctBy { it.packageName }.take(12)
         if (list.isEmpty()) {
-            tile(c, RectF(18f * d, 122f * d, w - 18f * d, 190f * d), "Nothing yet", "Launch an app and it will appear here.")
+            tile(c, RectF(16f * d, 120f * d, w - 16f * d, 190f * d), "Nothing yet", "Launch apps and they appear here")
         } else {
             list.forEachIndexed { i, a ->
-                val y = 118f * d + i * 66f * d
-                glass(c, RectF(18f * d, y, w - 18f * d, y + 56f * d), 18f * d)
-                icon(c, a.packageName, RectF(28f * d, y + 6f * d, 72f * d, y + 50f * d))
+                val y = 118f * d + i * 68f * d
+                glass(c, RectF(16f * d, y, w - 16f * d, y + 58f * d), 18f * d)
+                icon(c, a.packageName, RectF(28f * d, y + 8f * d, 70f * d, y + 50f * d))
                 p.textAlign = Paint.Align.LEFT
-                p.textSize = 14f * d
+                p.textSize = 15f * d
                 p.color = Color.WHITE
-                c.drawText(a.label, 86f * d, y + 34f * d, p)
+                c.drawText(a.label, 84f * d, y + 36f * d, p)
             }
         }
     }
 
     private fun folder(c: Canvas, w: Float) {
         val f = folders.load().firstOrNull { it.id == folderId }
-        header(c, f?.name ?: "Folder", "Drop apps together on Home to build folders")
-        f?.packages.orEmpty().mapNotNull { pkg ->
-            apps.firstOrNull { it.packageName == pkg }
-        }.forEachIndexed { i, a ->
-            val x = 18f * d + (i % 3) * ((w - 36f * d - 20f * d) / 3 + 10f * d)
-            val y = 120f * d + (i / 3) * 100f * d
-            val cell = (w - 36f * d - 20f * d) / 3
-            glass(c, RectF(x, y, x + cell, y + 84f * d), 22f * d)
-            icon(c, a.packageName, RectF(x + cell / 2 - 25f * d, y + 8f * d, x + cell / 2 + 25f * d, y + 58f * d))
-            p.textAlign = Paint.Align.CENTER
-            p.textSize = 10f * d
-            p.color = Color.WHITE
-            c.drawText(a.label.take(13), x + cell / 2, y + 75f * d, p)
-        }
+        header(c, f?.name ?: "Folder", "Apps in this folder")
+        f?.packages.orEmpty().mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
+            .forEachIndexed { i, a ->
+                val cell = (w - 48f * d) / 3
+                val x = 16f * d + (i % 3) * (cell + 8f * d)
+                val y = 120f * d + (i / 3) * 100f * d
+                glass(c, RectF(x, y, x + cell, y + 88f * d), 20f * d)
+                icon(c, a.packageName, RectF(x + cell / 2 - 24f * d, y + 10f * d, x + cell / 2 + 24f * d, y + 58f * d))
+                p.textAlign = Paint.Align.CENTER
+                p.textSize = 11f * d
+                p.color = Color.WHITE
+                c.drawText(a.label.take(12), x + cell / 2, y + 78f * d, p)
+            }
     }
 
     private fun notifications(c: Canvas, w: Float) {
-        header(c, "Activity", "Live Android notifications become one coherent surface")
+        header(c, "Activity", "Live notifications")
         val ns = AetherRuntime.registry.notifications.all()
         if (ns.isEmpty()) {
-            tile(c, RectF(18f * d, 122f * d, w - 18f * d, 194f * d), "No live activity", "Enable Notification Access in Settings.")
+            tile(c, RectF(16f * d, 120f * d, w - 16f * d, 200f * d), "No live activity", "Grant Notification Access in Settings")
         } else {
             ns.take(8).forEachIndexed { i, n ->
-                val y = 118f * d + i * 74f * d
-                tile(c, RectF(18f * d, y, w - 18f * d, y + 64f * d), n.title.ifBlank { "Notification" }, n.text.take(36))
+                val y = 118f * d + i * 76f * d
+                tile(c, RectF(16f * d, y, w - 16f * d, y + 66f * d), n.title.ifBlank { "Notification" }, n.text.take(40))
             }
         }
     }
 
     private fun multi(c: Canvas, w: Float) {
-        header(c, "Multitask", "Recent apps and supported Android windowing")
-        val list = history.load().mapNotNull { e ->
-            apps.firstOrNull { it.packageName == e.packageName }
-        }.distinctBy { it.packageName }.take(6)
-        list.forEachIndexed { i, a ->
-            val y = 118f * d + i * 78f * d
-            tile(c, RectF(18f * d, y, w - 18f * d, y + 66f * d), a.label, "Tap to reopen")
-        }
+        header(c, "Multitask", "Recent apps")
+        history.load().mapNotNull { e -> apps.firstOrNull { it.packageName == e.packageName } }
+            .distinctBy { it.packageName }.take(6).forEachIndexed { i, a ->
+                val y = 118f * d + i * 78f * d
+                tile(c, RectF(16f * d, y, w - 16f * d, y + 68f * d), a.label, "Tap to reopen")
+            }
     }
 
     private fun widgets(c: Canvas, w: Float) {
-        header(c, "Widgets", "Aether widget space")
-        tile(c, RectF(18f * d, 122f * d, w - 18f * d, 216f * d), "Live Widgets", "Interactive Android AppWidget providers")
-        tile(c, RectF(18f * d, 230f * d, w - 18f * d, 296f * d), "+ Add widget", "Open widget host")
+        header(c, "Widgets", "Aether widget host")
+        tile(c, RectF(16f * d, 120f * d, w - 16f * d, 210f * d), "Live Widgets", "Open widget host")
+        tile(c, RectF(16f * d, 226f * d, w - 16f * d, 296f * d), "+ Add widget", "Pick a provider")
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -371,54 +281,64 @@ class AetherSurfaceView(
             MotionEvent.ACTION_DOWN -> {
                 downX = e.x; downY = e.y
                 if (surface == AetherSurface.CONTROL) {
-                    // Brightness / volume vertical drag
-                    if (e.x in 18f * d..72f * d && e.y in 262f * d..420f * d) brightnessTouch = true
-                    if (e.x in 86f * d..140f * d && e.y in 262f * d..420f * d) volumeTouch = true
+                    if (e.x in 16f * d..70f * d && e.y in 316f * d..460f * d) brightnessTouch = true
+                    if (e.x in 84f * d..138f * d && e.y in 316f * d..460f * d) volumeTouch = true
                 }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (brightnessTouch) {
-                    val t = ((420f * d - e.y) / (158f * d)).coerceIn(0f, 1f)
-                    AetherRuntime.registry.controlCenter.setBrightness(t)
+                    AetherRuntime.registry.controlCenter.setBrightness(((460f * d - e.y) / (144f * d)).coerceIn(0f, 1f))
                     invalidate()
                 }
                 if (volumeTouch) {
-                    val t = ((420f * d - e.y) / (158f * d)).coerceIn(0f, 1f)
-                    AetherRuntime.registry.controlCenter.setVolume(t)
+                    AetherRuntime.registry.controlCenter.setVolume(((460f * d - e.y) / (144f * d)).coerceIn(0f, 1f))
                     invalidate()
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 brightnessTouch = false
                 volumeTouch = false
-                val dx = e.x - downX
                 val dy = e.y - downY
                 if (dy > 100f * d) {
                     (context as? Activity)?.finish()
                     return true
                 }
-                if (surface == AetherSurface.CONTROL && abs(dx) < 24f * d && abs(dy) < 24f * d) {
+                if (surface == AetherSurface.CONTROL && abs(e.x - downX) < 24f * d && abs(dy) < 24f * d) {
                     handleControlTap(e.x, e.y)
                     return true
                 }
                 if (surface == AetherSurface.QUICK && abs(dy) < 24f * d && e.y > 110f * d) {
                     val gap = 12f * d
-                    val left = 18f * d
+                    val left = 16f * d
                     val cell = (width - left * 2 - gap) / 2f
                     val col = ((e.x - left) / (cell + gap)).toInt()
-                    val row = ((e.y - 122f * d) / (72f * d)).toInt()
-                    val index = row * 2 + col
-                    when (index) {
+                    val row = ((e.y - 118f * d) / (76f * d)).toInt()
+                    when (row * 2 + col) {
                         0 -> note()
-                        1 -> Toast.makeText(context, "Voice capture requires microphone permission.", Toast.LENGTH_SHORT).show()
+                        1 -> Toast.makeText(context, "Allow microphone for voice notes", Toast.LENGTH_SHORT).show()
                         2 -> calculator()
-                        3 -> Toast.makeText(context, "Screen capture requires user approval.", Toast.LENGTH_SHORT).show()
-                        4 -> Toast.makeText(context, "Clipboard tools use the system clipboard.", Toast.LENGTH_SHORT).show()
-                        5 -> (context as? Activity)?.finish()
+                        3 -> {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            val t = cm?.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+                            Toast.makeText(context, t?.take(80) ?: "Clipboard empty", Toast.LENGTH_LONG).show()
+                        }
+                        4 -> context.startActivity(Intent(context, AetherSurfaceActivity::class.java).putExtra("surface", AetherSurface.HISTORY))
+                        5 -> context.startActivity(Intent(context, AetherSurfaceActivity::class.java).putExtra("surface", AetherSurface.CONTROL))
                         6 -> context.startActivity(Intent(context, AetherWidgetHostActivity::class.java))
                         7 -> context.startActivity(Intent(context, AetherSettingsActivity::class.java))
                     }
                     return true
+                }
+                if (surface == AetherSurface.DRAWER && abs(dy) < 24f * d) {
+                    val cols = 4
+                    val gap = 10f * d
+                    val left = 16f * d
+                    val top = 120f * d
+                    val cell = (width - left * 2 - gap * (cols - 1)) / cols
+                    val col = ((e.x - left) / (cell + gap)).toInt()
+                    val row = ((e.y - top) / (88f * d)).toInt()
+                    val idx = row * cols + col
+                    apps.getOrNull(idx)?.let { AetherRuntime.registry.launcher.launch(it.packageName) }
                 }
             }
         }
@@ -426,62 +346,47 @@ class AetherSurfaceView(
     }
 
     private fun handleControlTap(x: Float, y: Float) {
-        // Torch toggle (first circular)
-        val toggleY = 188f * d
+        val toggleY = 240f * d
         val toggleSize = 56f * d
-        val totalW = 4 * toggleSize + 3 * 14f * d
-        val startX = (width - totalW) / 2f
         if (y in toggleY..(toggleY + toggleSize)) {
-            val idx = ((x - startX) / (toggleSize + 14f * d)).toInt()
+            val idx = ((x - 16f * d) / (toggleSize + 14f * d)).toInt()
             when (idx) {
-                0 -> {
-                    AetherRuntime.registry.controlCenter.toggleTorch()
-                    invalidate()
-                }
-                1 -> {
-                    AetherRuntime.registry.controlCenter.toggleRotation()
-                    invalidate()
-                }
+                0 -> { AetherRuntime.registry.controlCenter.toggleTorch(); invalidate() }
+                1 -> { AetherRuntime.registry.controlCenter.toggleRotation(); invalidate() }
                 2 -> AetherSystemActions.toggleDnd(context)
                 3 -> AetherSystemActions.openAirplane(context)
             }
         }
-        // WiFi / BT cards open system settings (real Android limitation)
-        if (y in 48f * d..102f * d && x > width * 0.52f) AetherSystemActions.openWifi(context)
-        if (y in 110f * d..164f * d && x > width * 0.52f) AetherSystemActions.openBluetooth(context)
+        if (y in 110f * d..160f * d && x > width * 0.52f) AetherSystemActions.openWifi(context)
+        if (y in 170f * d..220f * d && x > width * 0.52f) AetherSystemActions.openBluetooth(context)
     }
 
     private fun note() {
-        val input = EditText(context)
-        input.hint = "Write a note…"
+        val input = EditText(context).apply { hint = "Write a note\u2026" }
         AlertDialog.Builder(context)
             .setTitle("New note")
             .setView(input)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save") { _, _ ->
                 AetherRuntime.registry.notes.capture(input.text.toString())
-                Toast.makeText(context, "Saved to Aether Notes", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
             }.show()
     }
 
     private fun calculator() {
-        val input = EditText(context)
-        input.hint = "12 + 8"
+        val input = EditText(context).apply { hint = "12 + 8" }
         AlertDialog.Builder(context)
             .setTitle("Calculator")
             .setView(input)
-            .setPositiveButton("Calculate") { _, _ ->
-                Toast.makeText(context, evaluate(input.text.toString()), Toast.LENGTH_SHORT).show()
+            .setPositiveButton("=") { _, _ ->
+                val s = input.text.toString().replace(" ", "")
+                val result = runCatching {
+                    val parts = s.split("+")
+                    if (parts.size == 2) (parts[0].toDouble() + parts[1].toDouble()).toString() else s
+                }.getOrElse { "?" }
+                Toast.makeText(context, result, Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Close", null)
             .show()
-    }
-
-    private fun evaluate(raw: String): String {
-        val s = raw.replace(" ", "")
-        return runCatching {
-            val parts = s.split("+")
-            if (parts.size == 2) (parts[0].toDouble() + parts[1].toDouble()).toString() else s
-        }.getOrElse { "Enter a simple expression" }
     }
 }
