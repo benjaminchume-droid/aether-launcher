@@ -17,12 +17,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // IMPORTANT: keep this exact application id. Changing it would create a different app.
         applicationId = "com.aetherlaucher.glassline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.6.0"
+        versionCode = 8
+        versionName = "0.6.1"
     }
 
     signingConfigs {
@@ -42,12 +41,11 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = false
-            if (releaseSigningReady) {
-                signingConfig = signingConfigs.getByName("release")
+            // Never assign null — use release when secrets exist, otherwise debug signing
+            signingConfig = if (releaseSigningReady) {
+                signingConfigs.getByName("release")
             } else {
-                // Allow local debug-signed release builds when secrets are absent
-                // CI still requires the stable keystore via the workflow check
-                signingConfig = null
+                signingConfigs.getByName("debug")
             }
         }
     }
@@ -56,19 +54,18 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = "17"
     }
-
-    // Ensure vector adaptive icons resolve on older tools
-    sourceSets.getByName("main").res.srcDirs("src/main/res")
 }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.10.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.dynamicanimation:dynamicanimation:1.0.0")
-    implementation("androidx.fragment:fragment-ktx:1.8.5")
 }

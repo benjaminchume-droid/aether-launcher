@@ -9,19 +9,17 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 import com.aether.launcher.AetherRuntime
 
 /**
  * App Lock surface.
- * - Glass circular keypad (reference style)
- * - Safe PIN verification against persisted hash
- * - Tiny Face + Fingerprint icons at bottom → tap triggers biometric
+ * Glass keypad + safe PIN hash verify + Face/Fingerprint icons that trigger biometric.
  */
-class LockActivity : FragmentActivity() {
+class LockActivity : AppCompatActivity() {
 
     private var targetPackage: String = ""
     private var appLabel: String = "Protected app"
@@ -32,6 +30,10 @@ class LockActivity : FragmentActivity() {
         targetPackage = intent.getStringExtra(EXTRA_PACKAGE) ?: run {
             finish()
             return
+        }
+
+        if (!AetherRuntime.isInitialized()) {
+            AetherRuntime.initialize(applicationContext)
         }
 
         appLabel = runCatching {
@@ -55,15 +57,12 @@ class LockActivity : FragmentActivity() {
             onCancel = { finish() }
         )
         setContentView(passcodeView)
-
-        // Auto-prompt biometric once
         passcodeView.post { attemptBiometric(appLabel) }
     }
 
     private fun handlePin(code: String) {
         val security = AetherRuntime.security
         when {
-            // First-time: no PIN set → set it if 4+ digits
             !security.hasPin() && code.length >= 4 -> {
                 if (security.setPin(code)) {
                     security.unlock(targetPackage)
@@ -71,7 +70,6 @@ class LockActivity : FragmentActivity() {
                     finish()
                 }
             }
-            // Verify against hash
             security.hasPin() && security.verifyPin(code) -> {
                 security.unlock(targetPackage)
                 finish()
@@ -104,18 +102,20 @@ class LockActivity : FragmentActivity() {
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    // Stay on passcode UI
+                    // Stay on passcode
                 }
             }
         )
 
-        prompt.authenticate(
-            BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Aether")
-                .setSubtitle("Unlock $label")
-                .setAllowedAuthenticators(authenticators)
-                .build()
-        )
+        runCatching {
+            prompt.authenticate(
+                BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Aether")
+                    .setSubtitle("Unlock $label")
+                    .setAllowedAuthenticators(authenticators)
+                    .build()
+            )
+        }
     }
 
     companion object {
@@ -156,14 +156,10 @@ private class GlassPasscodeView(
         "", "0", "DEL"
     )
 
-    // Hit targets for biometric icons
     private var faceRect = RectF()
     private var fingerRect = RectF()
 
     init {
-        if (Build.VERSION.SDK_INT >= 31) {
-            setRenderEffect(RenderEffect.createBlurEffect(18f, 18f, Shader.TileMode.CLAMP))
-        }
         isClickable = true
     }
 
@@ -193,7 +189,6 @@ private class GlassPasscodeView(
         paint.color = 0x55000000.toInt()
         c.drawRect(0f, 0f, w, h, paint)
 
-        // Title
         paint.style = Paint.Style.FILL
         paint.color = if (errorFlash) 0xFFFF6B6B.toInt() else Color.WHITE
         paint.textAlign = Paint.Align.CENTER
@@ -213,7 +208,6 @@ private class GlassPasscodeView(
             w / 2f, 128f * d, paint
         )
 
-        // Dots
         val dots = 6
         val dotRadius = 5f * d
         val spacing = 22f * d
@@ -230,7 +224,6 @@ private class GlassPasscodeView(
         }
         paint.style = Paint.Style.FILL
 
-        // Keypad
         val keySize = 66f * d
         val gap = 16f * d
         val gridWidth = 3 * keySize + 2 * gap
@@ -247,8 +240,7 @@ private class GlassPasscodeView(
             val scale = if (isPressed) 0.92f else 1f
             val radius = (keySize / 2f) * scale
 
-            val color = keyColors[index % keyColors.size]
-            paint.color = color
+            paint.color = keyColors[index % keyColors.size]
             paint.setShadowLayer(12f * d, 0f, 4f * d, 0x55000000)
             c.drawCircle(cx, cy, radius, paint)
             paint.clearShadowLayer()
@@ -287,7 +279,7 @@ private class GlassPasscodeView(
             }
         }
 
-        // ── Face + Fingerprint icons at bottom ──
+        // Face + Fingerprint icons
         val iconY = h - 110f * d
         val iconR = 22f * d
         val faceCx = w / 2f - 48f * d
@@ -296,7 +288,6 @@ private class GlassPasscodeView(
         faceRect.set(faceCx - iconR - 8f * d, iconY - iconR - 8f * d, faceCx + iconR + 8f * d, iconY + iconR + 8f * d)
         fingerRect.set(fingerCx - iconR - 8f * d, iconY - iconR - 8f * d, fingerCx + iconR + 8f * d, iconY + iconR + 8f * d)
 
-        // Face icon circle
         paint.color = 0x55FFFFFF.toInt()
         paint.style = Paint.Style.FILL
         c.drawCircle(faceCx, iconY, iconR, paint)
@@ -304,14 +295,12 @@ private class GlassPasscodeView(
         paint.strokeWidth = 1.5f * d
         paint.color = 0xAAFFFFFF.toInt()
         c.drawCircle(faceCx, iconY, iconR, paint)
-        // Simple face glyph
         paint.style = Paint.Style.FILL
         paint.color = Color.WHITE
-        paint.textSize = 18f * d
+        paint.textSize = 16f * d
         paint.textAlign = Paint.Align.CENTER
-        c.drawText("😐", faceCx, iconY + 6f * d, paint)
+        c.drawText("Face", faceCx, iconY + 5f * d, paint)
 
-        // Fingerprint icon circle
         paint.color = 0x55FFFFFF.toInt()
         paint.style = Paint.Style.FILL
         c.drawCircle(fingerCx, iconY, iconR, paint)
@@ -321,16 +310,14 @@ private class GlassPasscodeView(
         c.drawCircle(fingerCx, iconY, iconR, paint)
         paint.style = Paint.Style.FILL
         paint.color = Color.WHITE
-        paint.textSize = 18f * d
-        c.drawText("🖐", fingerCx, iconY + 6f * d, paint)
+        paint.textSize = 14f * d
+        c.drawText("Touch", fingerCx, iconY + 5f * d, paint)
 
-        // Labels under icons
         paint.textSize = 10f * d
         paint.color = 0x99FFFFFF.toInt()
-        c.drawText("Face", faceCx, iconY + iconR + 16f * d, paint)
-        c.drawText("Touch", fingerCx, iconY + iconR + 16f * d, paint)
+        c.drawText("Biometric", faceCx, iconY + iconR + 16f * d, paint)
+        c.drawText("Biometric", fingerCx, iconY + iconR + 16f * d, paint)
 
-        // Cancel
         paint.color = 0xCCFFFFFF.toInt()
         paint.textSize = 15f * d
         c.drawText("Cancel", w / 2f, h - 28f * d, paint)
@@ -352,7 +339,6 @@ private class GlassPasscodeView(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val key = hitKey(event.x, event.y, startKeyX, startKeyY, keySize, gap)
                 pressedKey = null
-
                 when {
                     key != null -> {
                         when (key) {
@@ -360,9 +346,7 @@ private class GlassPasscodeView(
                             else -> {
                                 if (entered.length < 6) entered.append(key)
                                 if (entered.length >= 4) {
-                                    handler.postDelayed({
-                                        onPinEntered(entered.toString())
-                                    }, 160)
+                                    handler.postDelayed({ onPinEntered(entered.toString()) }, 160)
                                 }
                             }
                         }
