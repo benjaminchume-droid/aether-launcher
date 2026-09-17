@@ -22,7 +22,7 @@ class EngineRegistry(context: Context) {
     val glass = GlassEngine()
     val physics = PhysicsEngine()
     val overlay = OverlayEngine()
-    val security = SecurityEngine()
+    val security = SecurityEngine(context)
     val sensing = AppSensingEngine()
     val striping = StripingSensingEngine()
     val island = DynamicIslandEngine()
@@ -31,7 +31,7 @@ class EngineRegistry(context: Context) {
     val system = SystemEngine()
     val persistence = PersistenceEngine(context)
     val launcher = LauncherEngine(context)
-    val controlCenter = ControlCenterEngine()
+    val controlCenter = ControlCenterEngine(context)
     val audioCapture = AudioCaptureEngine()
     val notes = NotesEngine()
 
