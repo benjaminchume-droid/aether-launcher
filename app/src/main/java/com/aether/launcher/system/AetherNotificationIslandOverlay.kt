@@ -19,9 +19,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Live notification / activity capsule.
- * Matches reference styles: compact pill, expanded media/call/download,
- * and Quick Reply composer that stays until the real notification changes.
+ * System-wide Dynamic Island.
+ * Always attached when overlay is granted. Sits in/near the camera cutout.
+ * Resizes for media / call / download / notification / charging.
  */
 class AetherNotificationIslandOverlay(private val service: AetherOverlayService) {
 
@@ -37,17 +37,21 @@ class AetherNotificationIslandOverlay(private val service: AetherOverlayService)
     fun show() {
         if (view != null || !Settings.canDrawOverlays(service)) return
         val c = store.load().island
+        if (!c.enabled) return
+
         val v = CapsuleView(service)
         val type = if (Build.VERSION.SDK_INT >= 26)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         else WindowManager.LayoutParams.TYPE_PHONE
 
         val p = WindowManager.LayoutParams(
-            dp(c.width.coerceAtLeast(92)),
-            dp(c.height.coerceAtLeast(28)),
+            dp(c.width.coerceAtLeast(110)),
+            dp(c.height.coerceAtLeast(30)),
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -71,24 +75,32 @@ class AetherNotificationIslandOverlay(private val service: AetherOverlayService)
         }
     }
 
+    /** Prefer the physical cutout; expand width to cover it when cutoutAware. */
     private fun place(p: WindowManager.LayoutParams) {
         if (Build.VERSION.SDK_INT >= 30) {
             val i = wm.currentWindowMetrics.windowInsets
             val top = i.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top
-            val cut = i.displayCutout?.boundingRects?.maxByOrNull { it.width() * it.height() }
-            p.y = if (cut != null && store.load().island.cutoutAware)
-                max(top, cut.bottom) + dp(3)
-            else top + dp(store.load().island.topOffset)
-            if (cut != null && store.load().island.cutoutAware) {
-                p.width = max(p.width, cut.width() + dp(54))
+            val cutout = i.displayCutout
+            val cut = cutout?.boundingRects?.maxByOrNull { it.width() * it.height() }
+            val cfg = store.load().island
+            if (cut != null && cfg.cutoutAware) {
+                // Sit just under the cutout, width at least cutout + padding
+                p.y = max(0, cut.bottom - dp(2))
+                p.width = max(p.width, cut.width() + dp(64))
+            } else {
+                p.y = top + dp(cfg.topOffset.coerceIn(0, 24))
             }
         } else {
-            p.y = dp(store.load().island.topOffset + 24)
+            val id = service.resources.getIdentifier("status_bar_height", "dimen", "android")
+            val status = if (id != 0) service.resources.getDimensionPixelSize(id) else dp(24)
+            p.y = status + dp(4)
         }
     }
 
     fun refresh() {
         val v = view ?: return
+        if (!Settings.canDrawOverlays(service)) return
+
         val a = AetherRuntime.registry.island.activity
         if (a.key != key && key.isNotBlank()) expanded = false
         key = a.key
@@ -100,20 +112,21 @@ class AetherNotificationIslandOverlay(private val service: AetherOverlayService)
 
         val c = store.load().island
         val w = when {
-            expanded && a.type == ActivityType.MEDIA -> dp(min(340, 300))
-            expanded && a.type == ActivityType.CALL -> dp(min(320, 280))
-            expanded && a.type == ActivityType.DOWNLOAD -> dp(min(320, 280))
-            expanded && a.type == ActivityType.NOTIFICATION -> dp(min(360, 300))
-            expanded && active -> dp(min(320, max(c.width + 100, 260)))
-            else -> dp(c.width.coerceAtLeast(92))
+            expanded && a.type == ActivityType.MEDIA -> dp(320)
+            expanded && a.type == ActivityType.CALL -> dp(300)
+            expanded && a.type == ActivityType.DOWNLOAD -> dp(300)
+            expanded && a.type == ActivityType.NOTIFICATION -> dp(320)
+            expanded && active -> dp(280)
+            active -> dp(max(c.width, 120))
+            else -> dp(max(c.width, 110)) // idle capsule still visible
         }
         val h = when {
             expanded && a.type == ActivityType.NOTIFICATION && v.replyable -> dp(168)
             expanded && a.type == ActivityType.MEDIA -> dp(96)
-            expanded && a.type == ActivityType.CALL -> dp(72)
-            expanded && a.type == ActivityType.DOWNLOAD -> dp(68)
-            expanded && active -> dp(max(c.height + 50, 78))
-            else -> dp(c.height.coerceAtLeast(28))
+            expanded && a.type == ActivityType.CALL -> dp(78)
+            expanded && a.type == ActivityType.DOWNLOAD -> dp(72)
+            expanded && active -> dp(80)
+            else -> dp(c.height.coerceAtLeast(30))
         }
         resize(w, h)
         v.invalidate()
@@ -130,14 +143,22 @@ class AetherNotificationIslandOverlay(private val service: AetherOverlayService)
 
     private fun toggle() {
         val a = AetherRuntime.registry.island.activity
-        if (a.type == ActivityType.NONE) return
+        if (a.type == ActivityType.NONE) {
+            // Idle tap opens notification surface
+            AetherSystemActions.openSurface(service, com.aether.launcher.ui.AetherSurface.NOTIFICATIONS)
+            return
+        }
         expanded = !expanded
         lp?.let {
             it.flags = if (expanded)
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             else
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             runCatching { wm.updateViewLayout(view, it) }
         }
         refresh()
@@ -166,6 +187,7 @@ private class CapsuleView(c: Context) : FrameLayout(c) {
 
     init {
         setWillNotDraw(false)
+        setBackgroundColor(Color.TRANSPARENT)
     }
 
     fun focusReply() {
@@ -182,10 +204,8 @@ private class CapsuleView(c: Context) : FrameLayout(c) {
 
     private fun composer() {
         if (input != null) return
-
-        // Matches Quick Reply reference: dark bubble + bright blue send
         input = EditText(context).apply {
-            hint = "Reply…"
+            hint = "Reply\u2026"
             setTextColor(Color.WHITE)
             setHintTextColor(0x99FFFFFF.toInt())
             textSize = 15f
@@ -199,25 +219,20 @@ private class CapsuleView(c: Context) : FrameLayout(c) {
                 } else false
             }
         }
-
         send = TextView(context).apply {
-            text = "→"
+            text = "\u2192"
             textSize = 20f
-            gravity = Gravity.CENTER
+            gravity = android.view.Gravity.CENTER
             setTextColor(Color.WHITE)
             background = bg(0xFF1E88FF.toInt(), 26)
             setOnClickListener { sendReply() }
         }
-
         addView(input, LayoutParams(-1, dp(48)).apply {
-            leftMargin = dp(14)
-            rightMargin = dp(66)
-            topMargin = dp(108)
+            leftMargin = dp(14); rightMargin = dp(66); topMargin = dp(108)
         })
         addView(send, LayoutParams(dp(48), dp(48)).apply {
-            gravity = Gravity.END
-            rightMargin = dp(14)
-            topMargin = dp(108)
+            gravity = android.view.Gravity.END
+            rightMargin = dp(14); topMargin = dp(108)
         })
     }
 
@@ -244,124 +259,100 @@ private class CapsuleView(c: Context) : FrameLayout(c) {
     }
 
     override fun onDraw(canvas: Canvas) {
-        val d = resources.displayMetrics.density
+        val dens = resources.displayMetrics.density
         val w = width.toFloat()
         val h = height.toFloat()
-        val r = min(h / 2f, 28f * d)
+        val r = min(h / 2f, 30f * dens)
 
-        // Dark glass body
-        p.color = 0xF20C0E12.toInt()
+        // Deep glass
+        p.color = 0xF40A0C10.toInt()
         canvas.drawRoundRect(RectF(0.5f, 0.5f, w - 0.5f, h - 0.5f), r, r, p)
 
-        // Subtle top highlight
         p.shader = LinearGradient(
-            0f, 0f, 0f, h * 0.45f,
-            0x33FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP
+            0f, 0f, 0f, h * 0.5f,
+            0x44FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP
         )
         canvas.drawRoundRect(RectF(1f, 1f, w - 1f, h - 1f), r, r, p)
         p.shader = null
 
-        // Border
         p.style = Paint.Style.STROKE
-        p.strokeWidth = max(1f, d * 0.9f)
-        p.color = 0x55FFFFFF.toInt()
+        p.strokeWidth = max(1f, dens)
+        p.color = 0x66FFFFFF.toInt()
         canvas.drawRoundRect(RectF(1f, 1f, w - 1f, h - 1f), r, r, p)
         p.style = Paint.Style.FILL
 
-        val expanded = h > 55f * d
+        val expanded = h > 55f * dens
         val active = activity.type != ActivityType.NONE && activity.title.isNotBlank()
 
-        // Leading glyph / progress indicator
         when (activity.type) {
-            ActivityType.RECORDING -> {
-                p.color = 0xFFFF5252.toInt()
-                canvas.drawCircle(22f * d, min(h * 0.5f, 20f * d), 4.5f * d, p)
-            }
-            ActivityType.CALL -> {
-                p.color = 0xFF69F0AE.toInt()
-                canvas.drawCircle(22f * d, min(h * 0.5f, 20f * d), 4.5f * d, p)
+            ActivityType.RECORDING, ActivityType.CALL -> {
+                p.color = if (activity.type == ActivityType.RECORDING) 0xFFFF5252.toInt() else 0xFF69F0AE.toInt()
+                canvas.drawCircle(20f * dens, min(h * 0.5f, 18f * dens), 4f * dens, p)
             }
             ActivityType.DOWNLOAD -> {
                 p.color = 0xFF69F0AE.toInt()
-                canvas.drawCircle(22f * d, min(h * 0.5f, 20f * d), 4.5f * d, p)
+                canvas.drawCircle(20f * dens, min(h * 0.5f, 18f * dens), 4f * dens, p)
             }
             ActivityType.MEDIA -> {
                 p.color = 0xFFEA80FC.toInt()
-                canvas.drawCircle(22f * d, min(h * 0.5f, 20f * d), 4.5f * d, p)
+                canvas.drawCircle(20f * dens, min(h * 0.5f, 18f * dens), 4f * dens, p)
+            }
+            ActivityType.CHARGING -> {
+                p.color = 0xFF8BE28A.toInt()
+                canvas.drawCircle(20f * dens, min(h * 0.5f, 18f * dens), 4f * dens, p)
             }
             else -> {
-                p.color = 0xAAFFFFFF.toInt()
-                canvas.drawCircle(22f * d, min(h * 0.5f, 20f * d), 3.5f * d, p)
+                p.color = 0x88FFFFFF.toInt()
+                canvas.drawCircle(20f * dens, min(h * 0.5f, 18f * dens), 3f * dens, p)
             }
         }
 
-        // Title
-        p.color = 0xF5FFFFFF.toInt()
+        p.color = 0xF8FFFFFF.toInt()
         p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = (if (expanded) 13f else 11f) * d
+        p.textSize = (if (expanded) 13f else 11f) * dens
         p.textAlign = Paint.Align.LEFT
-        val title = if (active) activity.title.take(if (expanded) 34 else 22) else "AETHER"
-        canvas.drawText(title, 36f * d, min(h * 0.52f, 22f * d), p)
+        val title = if (active) activity.title.take(if (expanded) 34 else 20) else "AETHER"
+        canvas.drawText(title, 32f * dens, min(h * 0.55f, 20f * dens), p)
 
         if (!expanded) return
 
-        // Detail / progress
         p.typeface = Typeface.DEFAULT
-        p.textSize = 11f * d
+        p.textSize = 11f * dens
         p.color = 0xB8FFFFFF.toInt()
         if (activity.detail.isNotBlank()) {
-            canvas.drawText(activity.detail.take(42), 36f * d, 40f * d, p)
+            canvas.drawText(activity.detail.take(40), 32f * dens, 40f * dens, p)
         }
 
         when (activity.type) {
-            ActivityType.MEDIA -> drawMediaControls(canvas, d, w, h)
-            ActivityType.CALL -> drawCallActions(canvas, d, w, h)
-            ActivityType.DOWNLOAD -> drawProgress(canvas, d, w, h)
-            ActivityType.NOTIFICATION -> {
-                if (!replyable) {
-                    p.textSize = 11f * d
-                    p.color = 0x99FFFFFF.toInt()
-                    canvas.drawText("Tap to open", 36f * d, 62f * d, p)
+            ActivityType.MEDIA -> {
+                if (activity.progress in 0f..1f) {
+                    p.color = 0x33FFFFFF
+                    canvas.drawRoundRect(RectF(32f * dens, 52f * dens, w - 32f * dens, 56f * dens), 2f * dens, 2f * dens, p)
+                    p.color = 0xFFEA80FC.toInt()
+                    val filled = 32f * dens + (w - 64f * dens) * activity.progress
+                    canvas.drawRoundRect(RectF(32f * dens, 52f * dens, filled, 56f * dens), 2f * dens, 2f * dens, p)
+                }
+                p.color = Color.WHITE
+                p.textSize = 18f * dens
+                p.textAlign = Paint.Align.CENTER
+                canvas.drawText("\u23EE  \u23F8  \u23ED", w / 2f, 80f * dens, p)
+            }
+            ActivityType.CALL -> {
+                p.color = 0xFFFF5252.toInt()
+                canvas.drawCircle(w - 72f * dens, 36f * dens, 15f * dens, p)
+                p.color = 0xFF448AFF.toInt()
+                canvas.drawCircle(w - 32f * dens, 36f * dens, 15f * dens, p)
+            }
+            ActivityType.DOWNLOAD, ActivityType.CHARGING -> {
+                if (activity.progress >= 0f) {
+                    p.color = 0x33FFFFFF
+                    canvas.drawRoundRect(RectF(32f * dens, 52f * dens, w - 32f * dens, 58f * dens), 3f * dens, 3f * dens, p)
+                    p.color = 0xFF69F0AE.toInt()
+                    val filled = 32f * dens + (w - 64f * dens) * activity.progress.coerceIn(0f, 1f)
+                    canvas.drawRoundRect(RectF(32f * dens, 52f * dens, filled, 58f * dens), 3f * dens, 3f * dens, p)
                 }
             }
             else -> {}
         }
-    }
-
-    private fun drawMediaControls(c: Canvas, d: Float, w: Float, h: Float) {
-        // Progress bar
-        if (activity.progress in 0f..1f) {
-            p.color = 0x33FFFFFF
-            c.drawRoundRect(RectF(36f * d, 52f * d, w - 36f * d, 56f * d), 2f * d, 2f * d, p)
-            p.color = 0xFFEA80FC.toInt()
-            val filled = 36f * d + (w - 72f * d) * activity.progress
-            c.drawRoundRect(RectF(36f * d, 52f * d, filled, 56f * d), 2f * d, 2f * d, p)
-        }
-        p.color = Color.WHITE
-        p.textSize = 20f * d
-        p.textAlign = Paint.Align.CENTER
-        c.drawText("⏮   ⏸   ⏭", w / 2f, 82f * d, p)
-    }
-
-    private fun drawCallActions(c: Canvas, d: Float, w: Float, h: Float) {
-        // Decline (red) + Answer (blue) matching reference
-        p.color = 0xFFFF5252.toInt()
-        c.drawCircle(w - 78f * d, 36f * d, 16f * d, p)
-        p.color = 0xFF448AFF.toInt()
-        c.drawCircle(w - 36f * d, 36f * d, 16f * d, p)
-        p.color = Color.WHITE
-        p.textSize = 14f * d
-        p.textAlign = Paint.Align.CENTER
-        c.drawText("☎", w - 78f * d, 41f * d, p)
-        c.drawText("☎", w - 36f * d, 41f * d, p)
-    }
-
-    private fun drawProgress(c: Canvas, d: Float, w: Float, h: Float) {
-        if (activity.progress < 0f) return
-        p.color = 0x33FFFFFF
-        c.drawRoundRect(RectF(36f * d, 52f * d, w - 36f * d, 58f * d), 3f * d, 3f * d, p)
-        p.color = 0xFF69F0AE.toInt()
-        val filled = 36f * d + (w - 72f * d) * activity.progress.coerceIn(0f, 1f)
-        c.drawRoundRect(RectF(36f * d, 52f * d, filled, 58f * d), 3f * d, 3f * d, p)
     }
 }

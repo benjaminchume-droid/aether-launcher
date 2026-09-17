@@ -13,8 +13,7 @@ import android.provider.Settings
 import com.aether.launcher.AetherRuntime
 
 /**
- * Persistent system interaction layer.
- * Island + Quick Space over any app when overlay permission is granted.
+ * Keeps Island + Quick Space edge alive over every app.
  */
 class AetherOverlayService : Service() {
 
@@ -24,7 +23,15 @@ class AetherOverlayService : Service() {
 
     private val refresher = object : Runnable {
         override fun run() {
-            runCatching { islandOverlay?.refresh() }
+            runCatching {
+                if (islandOverlay == null && Settings.canDrawOverlays(this@AetherOverlayService)) {
+                    islandOverlay = AetherNotificationIslandOverlay(this@AetherOverlayService).also { it.show() }
+                }
+                if (edgeOverlay == null && Settings.canDrawOverlays(this@AetherOverlayService)) {
+                    edgeOverlay = AetherEdgeOverlay(this@AetherOverlayService).also { it.show() }
+                }
+                islandOverlay?.refresh()
+            }
             val delay = if (AetherRuntime.isInitialized()) {
                 AetherRuntime.registry.performance.profile().maxOverlayRefreshMs
             } else 220L
@@ -40,12 +47,10 @@ class AetherOverlayService : Service() {
         }
 
         fun ensureRunning(context: android.content.Context) {
-            if (!Settings.canDrawOverlays(context)) return
             val intent = Intent(context, AetherOverlayService::class.java)
-            if (Build.VERSION.SDK_INT >= 26) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
+                else context.startService(intent)
             }
         }
     }
@@ -65,7 +70,7 @@ class AetherOverlayService : Service() {
             1001,
             Notification.Builder(this, channelId)
                 .setContentTitle("Aether is active")
-                .setContentText("Island + Quick Space running")
+                .setContentText("Island + Quick Space")
                 .setSmallIcon(android.R.drawable.ic_menu_view)
                 .setOngoing(true)
                 .build()
@@ -73,15 +78,23 @@ class AetherOverlayService : Service() {
 
         runCatching {
             AetherRuntime.initialize(applicationContext)
-            islandOverlay = AetherNotificationIslandOverlay(this).also { it.show() }
-            edgeOverlay = AetherEdgeOverlay(this).also { it.show() }
+            if (Settings.canDrawOverlays(this)) {
+                islandOverlay = AetherNotificationIslandOverlay(this).also { it.show() }
+                edgeOverlay = AetherEdgeOverlay(this).also { it.show() }
+            }
             MediaSessionBridge.start(applicationContext)
             handler.post(refresher)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        runCatching { islandOverlay?.refresh() }
+        runCatching {
+            if (Settings.canDrawOverlays(this)) {
+                if (islandOverlay == null) islandOverlay = AetherNotificationIslandOverlay(this).also { it.show() }
+                if (edgeOverlay == null) edgeOverlay = AetherEdgeOverlay(this).also { it.show() }
+                islandOverlay?.refresh()
+            }
+        }
         return START_STICKY
     }
 
