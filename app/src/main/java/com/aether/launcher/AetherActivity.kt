@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import com.aether.launcher.settings.AetherSettingsStore
 import com.aether.launcher.settings.AetherSetupView
+import com.aether.launcher.system.AetherOverlayService
 import com.aether.launcher.ui.AetherGlassRoot
 
 class AetherActivity : ComponentActivity() {
@@ -12,17 +13,26 @@ class AetherActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         AetherRuntime.initialize(applicationContext)
-        val store=AetherSettingsStore(this)
-        if(store.load().setupComplete){
-            val glass=AetherGlassRoot(this)
+
+        // Ensure Island + Quick Space are alive system-wide
+        AetherOverlayService.ensureRunning(this)
+
+        val store = AetherSettingsStore(this)
+        if (store.load().setupComplete) {
+            val glass = AetherGlassRoot(this)
             glass.attach(AetherHomeView(this))
             setContentView(glass)
-        }else{
-            setContentView(AetherSetupView(this){
-                val glass=AetherGlassRoot(this)
+        } else {
+            setContentView(AetherSetupView(this) {
+                val glass = AetherGlassRoot(this)
                 glass.attach(AetherHomeView(this))
                 setContentView(glass)
             })
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AetherOverlayService.ensureRunning(this)
     }
 }
