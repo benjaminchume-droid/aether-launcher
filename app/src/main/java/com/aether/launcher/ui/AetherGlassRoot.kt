@@ -16,41 +16,38 @@ import androidx.core.view.WindowCompat
 import com.aether.launcher.AetherRuntime
 
 /**
- * Shared visual root for every Aether surface.
- * Wallpaper is the material underneath. Real blur applied when supported.
- * Refraction atmosphere is always present.
+ * Wallpaper-first root.
+ * Prefers FLAG_SHOW_WALLPAPER from the activity; also draws WallpaperManager drawable as fallback.
  */
 class AetherGlassRoot(context: android.content.Context) : FrameLayout(context) {
 
     private val wallpaper = ImageView(context).apply {
         scaleType = ImageView.ScaleType.CENTER_CROP
-        alpha = 0.88f
+        alpha = 1f
         setImageDrawable(
             runCatching { WallpaperManager.getInstance(context).drawable }
-                .getOrElse { ColorDrawable(0xFF0B0F15.toInt()) }
+                .getOrNull()
         )
+        // If drawable is null, stay transparent so FLAG_SHOW_WALLPAPER shows through
+        if (drawable == null) {
+            setBackgroundColor(Color.TRANSPARENT)
+        }
     }
 
     private val atmosphere = View(context).apply {
-        // Soft dark atmosphere so glass surfaces pop
-        setBackgroundColor(0x28050A11)
-    }
-
-    private val vignette = View(context).apply {
-        setBackgroundColor(0x12000000)
+        // Very light dim so glass/icons read without killing wallpaper
+        setBackgroundColor(0x22000000)
     }
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
         addView(wallpaper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(atmosphere, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        addView(vignette, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        // Real blur on the wallpaper layer when available
-        if (Build.VERSION.SDK_INT >= 31 && AetherRuntime.isInitialized()) {
-            val radius = AetherRuntime.registry.glass.material().blurRadius.coerceIn(8f, 40f)
+        if (Build.VERSION.SDK_INT >= 31 && wallpaper.drawable != null) {
+            // Soft blur only when we have a drawable layer
             wallpaper.setRenderEffect(
-                RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
+                RenderEffect.createBlurEffect(12f, 12f, Shader.TileMode.CLAMP)
             )
         }
 
@@ -74,27 +71,17 @@ class AetherGlassRoot(context: android.content.Context) : FrameLayout(context) {
 
         if (content is AetherSurfaceView) {
             val back = TextView(context).apply {
-                text = "‹"
+                text = "\u2039"
                 textSize = 28f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(0x66151B24)
-                    cornerRadius = 22f * resources.displayMetrics.density
-                    setStroke(
-                        (resources.displayMetrics.density).toInt().coerceAtLeast(1),
-                        0x55FFFFFF
-                    )
-                }
-                elevation = 18f * resources.displayMetrics.density
+                setPadding(24, 24, 24, 24)
                 setOnClickListener { (context as? Activity)?.finish() }
-                contentDescription = "Back"
             }
-            val size = (46 * resources.displayMetrics.density).toInt()
-            addView(back, LayoutParams(size, size).apply {
+            addView(back, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.TOP or Gravity.START
-                leftMargin = (12 * resources.displayMetrics.density).toInt()
-                topMargin = (18 * resources.displayMetrics.density).toInt()
+                topMargin = 48
+                leftMargin = 8
             })
         }
     }

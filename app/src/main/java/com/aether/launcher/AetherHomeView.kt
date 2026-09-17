@@ -2,11 +2,9 @@ package com.aether.launcher
 
 import android.animation.ValueAnimator
 import android.app.AlertDialog
-import android.app.WallpaperManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.*
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -29,7 +27,10 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** Real wallpaper + liquid glass home. Long-press for uninstall / info / remove. */
+/**
+ * Home draws TRANSPARENT so FLAG_SHOW_WALLPAPER + GlassRoot show the real wallpaper.
+ * All-apps mode lists every launcher app. Long-press = uninstall / info / dock.
+ */
 class AetherHomeView(context: Context) : View(context) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val settings = AetherSettingsStore(context)
@@ -51,12 +52,7 @@ class AetherHomeView(context: Context) : View(context) {
     private var dragTarget = -1
     private var pressed: String? = null
     private var scale = 1f
-    private var searchLock = false
     private var longPressFired = false
-
-    private val wallpaperDrawable: Drawable? = runCatching {
-        WallpaperManager.getInstance(context).drawable
-    }.getOrNull()
 
     private val longPress = Runnable {
         val token = pressed ?: return@Runnable
@@ -66,7 +62,7 @@ class AetherHomeView(context: Context) : View(context) {
     }
 
     init {
-        // HARDWARE so wallpaper + glass paint correctly (software was washing everything to black)
+        setBackgroundColor(Color.TRANSPARENT)
         setLayerType(View.LAYER_TYPE_HARDWARE, null)
         isClickable = true
         syncApps()
@@ -75,7 +71,7 @@ class AetherHomeView(context: Context) : View(context) {
     override fun onDraw(c: Canvas) {
         cfg = settings.load()
         syncApps()
-        drawBackground(c)
+        // NO solid fill — wallpaper shows through
         drawTop(c)
         drawIslandHint(c)
         drawApps(c)
@@ -87,8 +83,21 @@ class AetherHomeView(context: Context) : View(context) {
     private fun syncApps() {
         val all = AetherRuntime.registry.launcher.apps().map { it.packageName }
         apps = when (cfg.homeMode) {
-            HomeMode.DRAWER_ONLY -> mutableListOf() // empty home; drawer has everything
-            else -> layout.order(all).toMutableList()
+            HomeMode.DRAWER_ONLY -> mutableListOf()
+            HomeMode.HOME_AND_DRAWER -> {
+                // Home shows a curated / ordered subset; still show all if no layout yet
+                val ordered = layout.order(all)
+                if (ordered.isEmpty()) all.toMutableList() else ordered.toMutableList()
+            }
+            HomeMode.ALL_APPS -> layout.order(all).toMutableList().ifEmpty { all.toMutableList() }
+        }
+        // ALWAYS ensure every installed launcher app is present in ALL_APPS mode
+        if (cfg.homeMode == HomeMode.ALL_APPS) {
+            val missing = all.filter { it !in apps }
+            if (missing.isNotEmpty()) {
+                apps.addAll(missing)
+                layout.save(apps)
+            }
         }
         page = page.coerceIn(0, max(0, pageCount() - 1))
     }
@@ -96,86 +105,47 @@ class AetherHomeView(context: Context) : View(context) {
     private fun pageSize() = cfg.grid.columns.coerceIn(4, 9) * cfg.grid.rows.coerceIn(4, 9)
     private fun pageCount() = max(1, (apps.size + pageSize() - 1) / pageSize())
 
-    /** REAL system wallpaper, then soft atmosphere so glass reads. */
-    private fun drawBackground(c: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-        val wp = wallpaperDrawable
-        if (wp != null) {
-            wp.setBounds(0, 0, width, height)
-            wp.draw(c)
-            // Light dim so icons stay readable without killing the wallpaper
-            p.shader = null
-            p.color = 0x33000000
-            c.drawRect(0f, 0f, w, h, p)
-        } else {
-            p.shader = LinearGradient(0f, 0f, 0f, h, 0xFF1A2332.toInt(), 0xFF0B0F15.toInt(), Shader.TileMode.CLAMP)
-            c.drawRect(0f, 0f, w, h, p)
-            p.shader = null
-        }
-    }
-
     private fun drawTop(c: Canvas) {
         p.textAlign = Paint.Align.LEFT
         p.typeface = Typeface.DEFAULT
         p.textSize = 11f * d
-        p.color = 0xE6FFFFFF.toInt()
-        p.setShadowLayer(6f * d, 0f, 2f * d, 0x88000000.toInt())
+        p.color = 0xF0FFFFFF.toInt()
+        p.setShadowLayer(8f * d, 0f, 2f * d, 0xCC000000.toInt())
         c.drawText(
             SimpleDateFormat("EEE  •  d MMM", Locale.getDefault()).format(Date()).uppercase(),
-            24f * d, 42f * d, p
+            24f * d, 48f * d, p
         )
         p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 34f * d
+        p.textSize = 36f * d
         p.color = Color.WHITE
-        c.drawText(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), 24f * d, 82f * d, p)
+        c.drawText(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), 24f * d, 90f * d, p)
         p.clearShadowLayer()
-        p.textAlign = Paint.Align.RIGHT
-        p.typeface = Typeface.DEFAULT
-        p.textSize = 9f * d
-        p.letterSpacing = 0.2f
-        p.color = 0x99FFFFFF.toInt()
-        if (cfg.appearance.showAetherLabel) c.drawText("A E T H E R", width - 24f * d, 43f * d, p)
-        p.letterSpacing = 0f
-        p.textAlign = Paint.Align.CENTER
     }
 
     private fun drawIslandHint(c: Canvas) {
+        // System overlay owns the real Island; only a thin spacer hint if needed
         if (!cfg.island.enabled) return
-        val a = AetherRuntime.registry.island.activity
-        val active = a.type != ActivityType.NONE && a.title.isNotBlank()
-        val w = min(width * 0.55f, 200f * d)
-        val h = 32f * d
-        val left = width / 2f - w / 2f
-        val top = max(8f * d, cfg.island.topOffset * d)
-        val r = RectF(left, top, left + w, top + h)
-        GlassPainter.drawGlass(c, r, h / 2f, if (active) 0xCC1A1F28.toInt() else 0xAA12161E.toInt())
-        p.color = Color.WHITE
-        p.textSize = 11f * d
-        p.typeface = Typeface.DEFAULT_BOLD
-        p.textAlign = Paint.Align.CENTER
-        c.drawText(
-            if (active) a.title.take(22) else "AETHER",
-            width / 2f, top + h * 0.68f, p
-        )
+        // leave top cutout area clear — OverlayService draws the live capsule
     }
 
     private fun drawApps(c: Canvas) {
         if (cfg.homeMode == HomeMode.DRAWER_ONLY) {
-            p.color = 0xAAFFFFFF.toInt()
-            p.textSize = 14f * d
+            p.color = 0xEEFFFFFF.toInt()
+            p.textSize = 15f * d
             p.textAlign = Paint.Align.CENTER
-            c.drawText("Swipe up for App Drawer", width / 2f, height * 0.45f, p)
+            p.setShadowLayer(6f * d, 0f, 2f * d, 0xAA000000.toInt())
+            c.drawText("Swipe up for App Drawer", width / 2f, height * 0.42f, p)
+            p.clearShadowLayer()
             return
         }
         val cols = cfg.grid.columns.coerceIn(4, 9)
         val rows = cfg.grid.rows.coerceIn(4, 9)
-        val left = 16f * d
-        val top = 110f * d
-        val bottom = height - 110f * d
+        val left = 12f * d
+        val top = 120f * d
+        val bottom = height - 118f * d
         val cellW = (width - left * 2) / cols
         val cellH = (bottom - top) / rows
-        val icon = min(cfg.grid.iconSize * d, min(cellW, cellH) * 0.55f)
+        val icon = min(cfg.grid.iconSize * d, min(cellW, cellH) * 0.52f)
         val start = page * pageSize()
         val slice = apps.drop(start).take(pageSize())
 
@@ -184,18 +154,28 @@ class AetherHomeView(context: Context) : View(context) {
             val col = i % cols
             val row = i / cols
             val cx = left + col * cellW + cellW / 2f
-            val cy = top + row * cellH + cellH * 0.38f
+            val cy = top + row * cellH + cellH * 0.36f
             val s = if (token == pressed) 0.92f else 1f
-            val size = icon * s
-            drawAppIcon(c, token, cx, cy, size)
+            drawAppIcon(c, token, cx, cy, icon * s)
             if (cfg.grid.showLabels) {
-                p.color = 0xF0FFFFFF.toInt()
+                p.color = 0xF5FFFFFF.toInt()
                 p.textSize = max(10f * d, cfg.grid.labelSize * d)
                 p.typeface = Typeface.DEFAULT
                 p.textAlign = Paint.Align.CENTER
-                p.setShadowLayer(4f * d, 0f, 1f * d, 0xAA000000.toInt())
-                c.drawText(label(token).take(12), cx, cy + size / 2f + 16f * d, p)
+                p.setShadowLayer(5f * d, 0f, 1.5f * d, 0xBB000000.toInt())
+                c.drawText(label(token).take(11), cx, cy + icon / 2f + 15f * d, p)
                 p.clearShadowLayer()
+            }
+        }
+
+        // Page dots
+        if (pageCount() > 1) {
+            val dotsY = height - 100f * d
+            val total = pageCount()
+            val startX = width / 2f - (total - 1) * 7f * d
+            for (i in 0 until total) {
+                p.color = if (i == page) 0xFFFFFFFF.toInt() else 0x66FFFFFF.toInt()
+                c.drawCircle(startX + i * 14f * d, dotsY, if (i == page) 3.5f * d else 2.5f * d, p)
             }
         }
     }
@@ -227,22 +207,21 @@ class AetherHomeView(context: Context) : View(context) {
         }.take(cfg.dock.appCount.coerceIn(3, 7))
         val h = cfg.dock.height * d
         val pad = cfg.dock.bottomPadding * d
-        val r = RectF(18f * d, height - h - pad, width - 18f * d, height - pad)
+        val r = RectF(16f * d, height - h - pad, width - 16f * d, height - pad)
         GlassPainter.drawGlass(c, r, cfg.dock.radius * d, 0xB0121822.toInt())
         val cell = r.width() / max(1, dockApps.size)
         val icon = min(48f * d, h * 0.55f)
         dockApps.forEachIndexed { i, pkg ->
-            val cx = r.left + cell * i + cell / 2f
-            val cy = r.centerY()
-            drawAppIcon(c, pkg, cx, cy, icon)
+            drawAppIcon(c, pkg, r.left + cell * i + cell / 2f, r.centerY(), icon)
         }
     }
 
     private fun drawHandle(c: Canvas) {
-        // App drawer cue
-        val y = height - 8f * d
-        p.color = 0x66FFFFFF.toInt()
-        c.drawRoundRect(RectF(width / 2f - 18f * d, y - 3f * d, width / 2f + 18f * d, y), 3f * d, 3f * d, p)
+        p.color = 0x88FFFFFF.toInt()
+        c.drawRoundRect(
+            RectF(width / 2f - 18f * d, height - 10f * d, width / 2f + 18f * d, height - 6f * d),
+            3f * d, 3f * d, p
+        )
     }
 
     private fun drawDrag(c: Canvas) {
@@ -289,21 +268,18 @@ class AetherHomeView(context: Context) : View(context) {
                     invalidate()
                     return true
                 }
-                // Swipe up → App Drawer
                 if (dy < -80f * d && abs(dy) > abs(dx) * 1.2f) {
                     open(AetherSurface.DRAWER)
                     pressed = null
                     invalidate()
                     return true
                 }
-                // Swipe down → Search
                 if (dy > 80f * d && abs(dy) > abs(dx) * 1.2f && e.y < height * 0.35f) {
                     context.startActivity(Intent(context, AetherSearchActivity::class.java))
                     pressed = null
                     invalidate()
                     return true
                 }
-                // Edge swipe for Quick Space
                 if (dx > 80f * d && downX < 28f * d) {
                     open(AetherSurface.QUICK)
                     pressed = null
@@ -317,11 +293,7 @@ class AetherHomeView(context: Context) : View(context) {
                     return true
                 }
                 if (abs(dx) < 24f * d && abs(dy) < 24f * d) {
-                    if (islandHit(downX, downY)) {
-                        open(AetherSurface.NOTIFICATIONS)
-                    } else {
-                        hit(e.x, e.y)?.let { launch(it) }
-                    }
+                    hit(e.x, e.y)?.let { launch(it) }
                 }
                 pressed = null
                 invalidate()
@@ -372,15 +344,6 @@ class AetherHomeView(context: Context) : View(context) {
             .show()
     }
 
-    private fun islandHit(x: Float, y: Float): Boolean {
-        val w = min(width * 0.55f, 200f * d)
-        val h = 32f * d
-        val top = max(8f * d, cfg.island.topOffset * d)
-        return cfg.island.enabled &&
-            x in (width / 2f - w / 2f)..(width / 2f + w / 2f) &&
-            y in top..(top + h)
-    }
-
     private fun startDrag(token: String) {
         dragging = token
         dragX = downX; dragY = downY
@@ -427,9 +390,9 @@ class AetherHomeView(context: Context) : View(context) {
         if (cfg.homeMode == HomeMode.DRAWER_ONLY) return -1
         val cols = cfg.grid.columns.coerceIn(4, 9)
         val rows = cfg.grid.rows.coerceIn(4, 9)
-        val left = 16f * d
-        val top = 110f * d
-        val bottom = height - 110f * d
+        val left = 12f * d
+        val top = 120f * d
+        val bottom = height - 118f * d
         val cellW = (width - left * 2) / cols
         val cellH = (bottom - top) / rows
         if (x < left || x > width - left || y < top || y > bottom) return -1
@@ -448,8 +411,8 @@ class AetherHomeView(context: Context) : View(context) {
         val pad = cfg.dock.bottomPadding * d
         val top = height - h - pad
         if (y < top || y > height - pad) return null
-        val cell = (width - 36f * d) / max(1, dockApps.size)
-        val idx = ((x - 18f * d) / cell).toInt()
+        val cell = (width - 32f * d) / max(1, dockApps.size)
+        val idx = ((x - 16f * d) / cell).toInt()
         return dockApps.getOrNull(idx)
     }
 
