@@ -12,12 +12,10 @@ import android.view.Gravity
 import android.view.View
 import android.widget.*
 import com.aether.launcher.AetherRuntime
-import com.aether.launcher.ui.GlassPainter
 
 /**
  * Full first-run Setup Wizard.
- * Matches the reference: iOS-style Hello → progressive configuration,
- * wallpaper under glass with refraction on every page.
+ * Hello → progressive configuration, wallpaper under glass on every page.
  */
 class AetherSetupView(
     context: Context,
@@ -46,7 +44,6 @@ class AetherSetupView(
 
     init {
         addView(wallpaper, LayoutParams(-1, -1))
-        // Soft atmosphere so glass pops
         addView(View(context).apply { setBackgroundColor(0x4403070D) }, LayoutParams(-1, -1))
         addView(ScrollView(context).apply {
             isFillViewport = true
@@ -79,7 +76,7 @@ class AetherSetupView(
         body.addView(action, lp(-1, 56))
         if (page > 0) {
             body.addView(TextView(context).apply {
-                text = "‹  Back"
+                text = "\u2039  Back"
                 textSize = 15f
                 setTextColor(0xCFFFFFFF.toInt())
                 gravity = Gravity.CENTER
@@ -102,7 +99,6 @@ class AetherSetupView(
         body.addView(row, 0, lp(-1, 28))
     }
 
-    // ─── Page 0: Hello (reference style) ───
     private fun hello() {
         body.addView(View(context), lp(-1, 80))
         body.addView(TextView(context).apply {
@@ -111,7 +107,7 @@ class AetherSetupView(
             typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setShadowLayer(24f, 0f, 6f, 0x80000000)
+            setShadowLayer(24f, 0f, 6f, 0x80000000.toInt())
         }, lp(-1, 90))
         body.addView(TextView(context).apply {
             text = "Welcome to Aether"
@@ -136,7 +132,6 @@ class AetherSetupView(
         }, lp(-1, 40))
     }
 
-    // ─── Page 1: Home mode ───
     private fun homeChoice() {
         title("How should Home behave?")
         paragraph("This is the only choice that changes your first interaction. Everything stays editable later.")
@@ -145,14 +140,12 @@ class AetherSetupView(
         option("App Drawer only", "Minimal Home with the library as the primary surface.", HomeMode.DRAWER_ONLY)
     }
 
-    // ─── Page 2: Grid + look ───
     private fun gridAndLook() {
         title("Grid & look")
-        paragraph("4×4 through 9×9. Icon size, labels, dock and glass depth are all adjustable later.")
-        glassPanel("GRID", "${s.grid.columns}×${s.grid.rows}  •  icon ${s.grid.iconSize}dp  •  labels ${if (s.grid.showLabels) "on" else "off"}")
-        glassPanel("DOCK", if (s.dock.enabled) "Enabled  •  ${s.dock.appCount} apps" else "Disabled")
-        glassPanel("GLASS", "Opacity ${s.glass.opacity}%  •  blur ${s.glass.blur}  •  depth ${s.glass.depth}")
-        // Simple steppers
+        paragraph("4\u00d74 through 9\u00d79. Icon size, labels, dock and glass depth are all adjustable later.")
+        glassPanel("GRID", "${s.grid.columns}\u00d7${s.grid.rows}  \u2022  icon ${s.grid.iconSize}dp  \u2022  labels ${if (s.grid.showLabels) "on" else "off"}")
+        glassPanel("DOCK", if (s.dock.enabled) "Enabled  \u2022  ${s.dock.appCount} apps" else "Disabled")
+        glassPanel("GLASS", "Opacity ${s.glass.opacity}%  \u2022  blur ${s.glass.blur}  \u2022  depth ${s.glass.depth}")
         stepper("Columns", s.grid.columns, 4, 9) { v ->
             s = s.copy(grid = s.grid.copy(columns = v))
             store.save(s); render()
@@ -163,7 +156,6 @@ class AetherSetupView(
         }
     }
 
-    // ─── Page 3: Island + Quick Space ───
     private fun islandAndQuick() {
         title("Island & Quick Space")
         paragraph("The capsule lives over every app. Quick Space lives on the edge.")
@@ -179,11 +171,10 @@ class AetherSetupView(
             s = s.copy(quickSpace = s.quickSpace.copy(enabled = it))
             store.save(s); render()
         }
-        glassPanel("ISLAND", "Media • Calls • Downloads • Recording • Notifications • Reply")
-        glassPanel("QUICK SPACE", "Notes • Recorder • Calculator • Screenshot • Clipboard • Recents")
+        glassPanel("ISLAND", "Media \u2022 Calls \u2022 Downloads \u2022 Recording \u2022 Notifications \u2022 Reply")
+        glassPanel("QUICK SPACE", "Notes \u2022 Recorder \u2022 Calculator \u2022 Screenshot \u2022 Clipboard \u2022 Recents")
     }
 
-    // ─── Page 4: Permissions / system layer ───
     private fun systemLayer() {
         title("Unlock the Aether layer")
         paragraph("These are optional Android capabilities. Enable only what you want.")
@@ -210,25 +201,22 @@ class AetherSetupView(
         }
     }
 
-    // ─── Page 5: Finish ───
     private fun finishPage() {
         title("You're ready.")
         paragraph("Aether keeps your layout, folders, dock and security choices on-device. Change anything later from Aether Settings.")
         glassPanel(
             "STARTING SETUP",
-            "${s.homeMode.name.replace('_', ' ')}  •  ${AetherRuntime.registry.launcher.apps().size} apps  •  Glass on"
+            "${s.homeMode.name.replace('_', ' ')}  \u2022  ${AetherRuntime.registry.launcher.apps().size} apps  \u2022  Glass on"
         )
         glassPanel(
             "GESTURES",
-            "Swipe pages  •  swipe down for Search  •  edge for Quick Space  •  long-press + drag to merge"
+            "Swipe pages  \u2022  swipe down for Search  \u2022  edge for Quick Space  \u2022  long-press + drag to merge"
         )
         glassPanel(
             "SYSTEM LAYER",
             "Island + Quick Space run over every app once overlay permission is granted"
         )
     }
-
-    // ─── Helpers ───
 
     private fun title(text: String) {
         body.addView(TextView(context).apply {
@@ -237,7 +225,7 @@ class AetherSetupView(
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setShadowLayer(16f, 0f, 4f, 0x70000000)
+            setShadowLayer(16f, 0f, 4f, 0x70000000.toInt())
         }, lp(-1, 70))
     }
 
@@ -289,7 +277,7 @@ class AetherSetupView(
             }
         }
         box.addView(TextView(context).apply {
-            text = (if (selected) "●  " else "○  ") + head
+            text = (if (selected) "\u25CF  " else "\u25CB  ") + head
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
@@ -334,7 +322,7 @@ class AetherSetupView(
             setTextColor(Color.WHITE)
         }, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(TextView(context).apply {
-            text = "−"
+            text = "\u2212"
             textSize = 22f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)

@@ -4,6 +4,7 @@ import android.content.Context
 import com.aether.launcher.engine.AetherEngine
 import com.aether.launcher.engine.capture.AudioCaptureEngine
 import com.aether.launcher.engine.control.ControlCenterEngine
+import com.aether.launcher.engine.diagnostics.DiagnosticsEngine
 import com.aether.launcher.engine.glass.GlassEngine
 import com.aether.launcher.engine.island.DynamicIslandEngine
 import com.aether.launcher.engine.launcher.LauncherEngine
@@ -36,10 +37,12 @@ class EngineRegistry(context: Context) {
     val audioCapture = AudioCaptureEngine()
     val notes = NotesEngine()
     val performance = PerformanceEngine(context)
+    val diagnostics = DiagnosticsEngine(context)
 
     val engines: List<AetherEngine> = listOf(
         glass, physics, overlay, security, sensing, striping, island, multitasking,
-        notifications, system, persistence, launcher, controlCenter, audioCapture, notes, performance
+        notifications, system, persistence, launcher, controlCenter, audioCapture,
+        notes, performance, diagnostics
     )
 
     fun startAll() = engines.forEach { it.start() }
