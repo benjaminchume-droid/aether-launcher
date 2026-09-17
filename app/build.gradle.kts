@@ -20,8 +20,8 @@ android {
         applicationId = "com.aetherlaucher.glassline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.7.0"
+        versionCode = 10
+        versionName = "0.7.1"
     }
 
     signingConfigs {
@@ -36,9 +36,7 @@ android {
     }
 
     buildTypes {
-        getByName("debug") {
-            isMinifyEnabled = false
-        }
+        getByName("debug") { isMinifyEnabled = false }
         getByName("release") {
             isMinifyEnabled = false
             signingConfig = if (releaseSigningReady) {
@@ -53,10 +51,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
 }
 
 dependencies {
