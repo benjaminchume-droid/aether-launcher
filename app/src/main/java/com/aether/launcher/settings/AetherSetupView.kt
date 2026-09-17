@@ -7,6 +7,7 @@ import android.graphics.*
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -14,8 +15,7 @@ import android.widget.*
 import com.aether.launcher.AetherRuntime
 
 /**
- * Full first-run Setup Wizard.
- * Hello → progressive configuration, wallpaper under glass on every page.
+ * Setup over the REAL wallpaper with glass panels (not a black sheet).
  */
 class AetherSetupView(
     context: Context,
@@ -29,11 +29,17 @@ class AetherSetupView(
 
     private val wallpaper = ImageView(context).apply {
         scaleType = ImageView.ScaleType.CENTER_CROP
-        alpha = 0.78f
+        // Full visibility of wallpaper — glass sits on top
+        alpha = 1f
         setImageDrawable(
             runCatching { WallpaperManager.getInstance(context).drawable }
-                .getOrElse { ColorDrawable(0xFF10141A.toInt()) }
+                .getOrElse { ColorDrawable(0xFF1A2332.toInt()) }
         )
+        if (Build.VERSION.SDK_INT >= 31) {
+            setRenderEffect(
+                RenderEffect.createBlurEffect(22f, 22f, Shader.TileMode.CLAMP)
+            )
+        }
     }
 
     private val body = LinearLayout(context).apply {
@@ -44,7 +50,8 @@ class AetherSetupView(
 
     init {
         addView(wallpaper, LayoutParams(-1, -1))
-        addView(View(context).apply { setBackgroundColor(0x4403070D) }, LayoutParams(-1, -1))
+        // Light atmosphere only — wallpaper must remain visible
+        addView(View(context).apply { setBackgroundColor(0x4D05070C) }, LayoutParams(-1, -1))
         addView(ScrollView(context).apply {
             isFillViewport = true
             addView(body)
@@ -78,7 +85,7 @@ class AetherSetupView(
             body.addView(TextView(context).apply {
                 text = "\u2039  Back"
                 textSize = 15f
-                setTextColor(0xCFFFFFFF.toInt())
+                setTextColor(0xE6FFFFFF.toInt())
                 gravity = Gravity.CENTER
                 setOnClickListener { page--; render() }
             }, lp(-1, 48))
@@ -89,8 +96,7 @@ class AetherSetupView(
         val row = LinearLayout(context).apply { gravity = Gravity.CENTER }
         for (i in 0..5) {
             val v = View(context).apply {
-                setBackgroundColor(if (i == page) 0xEFFFFFFF.toInt() else 0x55FFFFFF)
-                alpha = if (i == page) 1f else 0.7f
+                setBackgroundColor(if (i == page) 0xFFFFFFFF.toInt() else 0x66FFFFFF)
             }
             row.addView(v, LinearLayout.LayoutParams(
                 dp(if (i == page) 36 else 14), dp(3)
@@ -100,34 +106,36 @@ class AetherSetupView(
     }
 
     private fun hello() {
-        body.addView(View(context), lp(-1, 80))
+        body.addView(View(context), lp(-1, 100))
         body.addView(TextView(context).apply {
             text = "hello"
-            textSize = 54f
+            textSize = 58f
             typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setShadowLayer(24f, 0f, 6f, 0x80000000.toInt())
+            setShadowLayer(28f, 0f, 8f, 0xAA000000.toInt())
         }, lp(-1, 90))
         body.addView(TextView(context).apply {
             text = "Welcome to Aether"
-            textSize = 16f
-            setTextColor(0xCCFFFFFF.toInt())
+            textSize = 17f
+            setTextColor(0xF0FFFFFF.toInt())
             gravity = Gravity.CENTER
+            setShadowLayer(10f, 0f, 2f, 0x88000000.toInt())
         }, lp(-1, 36))
-        body.addView(View(context), lp(-1, 40))
+        body.addView(View(context), lp(-1, 36))
         body.addView(TextView(context).apply {
             text = "A calm, fluid workspace built around your wallpaper,\nyour apps, and the way you move between them."
             textSize = 14f
-            setTextColor(0xB8FFFFFF.toInt())
+            setTextColor(0xE0FFFFFF.toInt())
             gravity = Gravity.CENTER
             setLineSpacing(5f, 1f)
+            setShadowLayer(8f, 0f, 1f, 0x66000000.toInt())
         }, lp(-1, 70))
-        body.addView(View(context), lp(-1, 30))
+        body.addView(View(context), lp(-1, 24))
         body.addView(TextView(context).apply {
             text = "Swipe up or tap Continue"
             textSize = 13f
-            setTextColor(0x99FFFFFF.toInt())
+            setTextColor(0xCCFFFFFF.toInt())
             gravity = Gravity.CENTER
         }, lp(-1, 40))
     }
@@ -147,12 +155,10 @@ class AetherSetupView(
         glassPanel("DOCK", if (s.dock.enabled) "Enabled  \u2022  ${s.dock.appCount} apps" else "Disabled")
         glassPanel("GLASS", "Opacity ${s.glass.opacity}%  \u2022  blur ${s.glass.blur}  \u2022  depth ${s.glass.depth}")
         stepper("Columns", s.grid.columns, 4, 9) { v ->
-            s = s.copy(grid = s.grid.copy(columns = v))
-            store.save(s); render()
+            s = s.copy(grid = s.grid.copy(columns = v)); store.save(s); render()
         }
         stepper("Rows", s.grid.rows, 4, 9) { v ->
-            s = s.copy(grid = s.grid.copy(rows = v))
-            store.save(s); render()
+            s = s.copy(grid = s.grid.copy(rows = v)); store.save(s); render()
         }
     }
 
@@ -160,16 +166,13 @@ class AetherSetupView(
         title("Island & Quick Space")
         paragraph("The capsule lives over every app. Quick Space lives on the edge.")
         toggleRow("Dynamic Island", s.island.enabled) {
-            s = s.copy(island = s.island.copy(enabled = it))
-            store.save(s); render()
+            s = s.copy(island = s.island.copy(enabled = it)); store.save(s); render()
         }
         toggleRow("Cutout aware", s.island.cutoutAware) {
-            s = s.copy(island = s.island.copy(cutoutAware = it))
-            store.save(s); render()
+            s = s.copy(island = s.island.copy(cutoutAware = it)); store.save(s); render()
         }
         toggleRow("Quick Space", s.quickSpace.enabled) {
-            s = s.copy(quickSpace = s.quickSpace.copy(enabled = it))
-            store.save(s); render()
+            s = s.copy(quickSpace = s.quickSpace.copy(enabled = it)); store.save(s); render()
         }
         glassPanel("ISLAND", "Media \u2022 Calls \u2022 Downloads \u2022 Recording \u2022 Notifications \u2022 Reply")
         glassPanel("QUICK SPACE", "Notes \u2022 Recorder \u2022 Calculator \u2022 Screenshot \u2022 Clipboard \u2022 Recents")
@@ -184,10 +187,7 @@ class AetherSetupView(
         permission("Liquid Island", "Allow Aether to render its floating system layer.") {
             runCatching {
                 context.startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:${context.packageName}")
-                    )
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
                 )
             }
         }
@@ -203,63 +203,53 @@ class AetherSetupView(
 
     private fun finishPage() {
         title("You're ready.")
-        paragraph("Aether keeps your layout, folders, dock and security choices on-device. Change anything later from Aether Settings.")
-        glassPanel(
-            "STARTING SETUP",
-            "${s.homeMode.name.replace('_', ' ')}  \u2022  ${AetherRuntime.registry.launcher.apps().size} apps  \u2022  Glass on"
-        )
-        glassPanel(
-            "GESTURES",
-            "Swipe pages  \u2022  swipe down for Search  \u2022  edge for Quick Space  \u2022  long-press + drag to merge"
-        )
-        glassPanel(
-            "SYSTEM LAYER",
-            "Island + Quick Space run over every app once overlay permission is granted"
-        )
+        paragraph("Aether keeps your layout, folders, dock and security choices on-device.")
+        glassPanel("STARTING", "${s.homeMode.name.replace('_', ' ')}  \u2022  ${AetherRuntime.registry.launcher.apps().size} apps")
+        glassPanel("GESTURES", "Swipe up = Drawer  \u2022  swipe down = Search  \u2022  long-press = Uninstall / Info")
     }
 
     private fun title(text: String) {
         body.addView(TextView(context).apply {
             this.text = text
-            textSize = 32f
+            textSize = 30f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setShadowLayer(16f, 0f, 4f, 0x70000000.toInt())
-        }, lp(-1, 70))
+            setShadowLayer(16f, 0f, 4f, 0xAA000000.toInt())
+        }, lp(-1, 64))
     }
 
     private fun paragraph(text: String) {
         body.addView(TextView(context).apply {
             this.text = text
             textSize = 14f
-            setTextColor(0xD0FFFFFF.toInt())
+            setTextColor(0xF0FFFFFF.toInt())
             gravity = Gravity.CENTER
             setLineSpacing(4f, 1f)
+            setShadowLayer(8f, 0f, 1f, 0x66000000.toInt())
             setPadding(dp(8), 0, dp(8), 0)
-        }, lp(-1, 70))
+        }, lp(-1, 64))
     }
 
     private fun glassPanel(head: String, detail: String) {
         val box = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(14), dp(18), dp(14))
-            background = glassDrawable(0x6F111820.toInt(), 24f)
-            elevation = dp(6).toFloat()
+            background = glassDrawable(0x99101820.toInt(), 26f)
+            elevation = dp(8).toFloat()
         }
         box.addView(TextView(context).apply {
             text = head
             textSize = 11f
-            letterSpacing = 0.12f
+            letterSpacing = 0.1f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xF2FFFFFF.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
         })
         box.addView(TextView(context).apply {
             text = detail
-            textSize = 12f
-            setTextColor(0xCFFFFFFF.toInt())
+            textSize = 13f
+            setTextColor(0xE6FFFFFF.toInt())
             setPadding(0, dp(5), 0, 0)
-            setLineSpacing(3f, 1f)
         })
         body.addView(box, lp(-1, -2).also { it.setMargins(0, dp(6), 0, dp(6)) })
     }
@@ -269,7 +259,8 @@ class AetherSetupView(
         val box = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(14), dp(18), dp(14))
-            background = glassDrawable(if (selected) 0x9A5D8FE4.toInt() else 0x64111820.toInt(), 24f)
+            background = glassDrawable(if (selected) 0xB05B8FEA.toInt() else 0x99101820.toInt(), 26f)
+            elevation = dp(6).toFloat()
             setOnClickListener {
                 s = s.copy(homeMode = value)
                 store.save(s)
@@ -284,18 +275,18 @@ class AetherSetupView(
         })
         box.addView(TextView(context).apply {
             text = detail
-            textSize = 11f
-            setTextColor(0xCFFFFFFF.toInt())
+            textSize = 12f
+            setTextColor(0xE0FFFFFF.toInt())
             setPadding(dp(22), dp(4), 0, 0)
         })
-        body.addView(box, lp(-1, 76).also { it.setMargins(0, dp(5), 0, dp(5)) })
+        body.addView(box, lp(-1, 78).also { it.setMargins(0, dp(5), 0, dp(5)) })
     }
 
     private fun toggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
         val row = LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(10), dp(12), dp(10))
-            background = glassDrawable(0x68111820.toInt(), 22f)
+            background = glassDrawable(0x99101820.toInt(), 22f)
         }
         row.addView(TextView(context).apply {
             text = label
@@ -314,7 +305,7 @@ class AetherSetupView(
         val row = LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(8), dp(10), dp(8))
-            background = glassDrawable(0x68111820.toInt(), 22f)
+            background = glassDrawable(0x99101820.toInt(), 22f)
         }
         row.addView(TextView(context).apply {
             text = label
@@ -348,7 +339,7 @@ class AetherSetupView(
         val box = LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(12), dp(12), dp(12))
-            background = glassDrawable(0x68111820.toInt(), 22f)
+            background = glassDrawable(0x99101820.toInt(), 22f)
             setOnClickListener { click() }
         }
         box.addView(LinearLayout(context).apply {
@@ -362,7 +353,7 @@ class AetherSetupView(
             addView(TextView(context).apply {
                 text = detail
                 textSize = 11f
-                setTextColor(0xBFFFFFFF.toInt())
+                setTextColor(0xCCFFFFFF.toInt())
                 setPadding(0, dp(3), 0, 0)
             })
         }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -370,7 +361,7 @@ class AetherSetupView(
             text = "OPEN"
             textSize = 11f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xEFFFFFFF.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(dp(56), dp(36)))
         body.addView(box, lp(-1, 68).also { it.setMargins(0, dp(5), 0, dp(5)) })
@@ -382,7 +373,7 @@ class AetherSetupView(
         typeface = Typeface.DEFAULT_BOLD
         setTextColor(Color.WHITE)
         gravity = Gravity.CENTER
-        background = glassDrawable(0xB65B8FEA.toInt(), 28f)
+        background = glassDrawable(0xCC5B8FEA.toInt(), 28f)
         elevation = dp(10).toFloat()
         setOnClickListener { onClick() }
     }
@@ -390,7 +381,7 @@ class AetherSetupView(
     private fun glassDrawable(base: Int, radius: Float) = GradientDrawable().apply {
         setColor(base)
         cornerRadius = dp(radius.toInt()).toFloat()
-        setStroke(dp(1), 0x55FFFFFF)
+        setStroke(dp(1), 0x66FFFFFF)
     }
 
     private fun lp(w: Int, h: Int) = LinearLayout.LayoutParams(w, h)
