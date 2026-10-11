@@ -2,8 +2,8 @@ name: Build Aether APK
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -15,9 +15,15 @@ env:
   AETHER_KEY_PASSWORD: ${{ secrets.AETHER_KEY_PASSWORD || vars.AETHER_KEY_PASSWORD }}
   AETHER_KEYSTORE_PATH: aether-release.keystore
 
+concurrency:
+  group: aether-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build, sign, and verify universal APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,36 +34,90 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Restore stable Aether signing key
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Restore and validate stable Aether signing key
         env:
           AETHER_KEYSTORE_BASE64: ${{ secrets.AETHER_KEYSTORE_BASE64 || vars.AETHER_KEYSTORE_BASE64 }}
+        shell: bash
         run: |
-          if [ -z "$AETHER_KEYSTORE_BASE64" ]; then
-            echo "::warning::AETHER_KEYSTORE_BASE64 missing — building with debug signing."
-            exit 0
-          fi
+          set -euo pipefail
+          for name in AETHER_KEYSTORE_BASE64 AETHER_KEYSTORE_PASSWORD AETHER_KEY_ALIAS AETHER_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required repository secret or variable: $name"
+              exit 1
+            fi
+          done
           printf '%s' "$AETHER_KEYSTORE_BASE64" | base64 --decode > "$AETHER_KEYSTORE_PATH"
           test -s "$AETHER_KEYSTORE_PATH"
-          echo "Keystore restored ($(wc -c < "$AETHER_KEYSTORE_PATH") bytes)"
+          echo "Release keystore restored and non-empty."
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
 
-      - name: Build release APK
-        run: gradle --no-daemon assembleRelease --stacktrace
+      - name: Run unit tests and build signed release APK
+        run: gradle --no-daemon --stacktrace clean testReleaseUnitTest assembleRelease
 
-      - name: Upload release APK
+      - name: Verify APK integrity, signature, and package identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK" || { echo "::error::Release APK was not generated"; exit 1; }
+
+          # No ABI splits are configured, so this must be the only APK in the release output.
+          mapfile -t APKS < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print)
+          if [ "${#APKS[@]}" -ne 1 ] || [ "${APKS[0]}" != "$APK" ]; then
+            echo "::error::Expected exactly one universal APK; found: ${APKS[*]:-none}"
+            exit 1
+          fi
+
+          unzip -t "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/aether-badging.txt"
+          grep -F "package: name='orubus.aether.launcher'" "$RUNNER_TEMP/aether-badging.txt"
+          sha256sum "$APK" | tee "$APK.sha256"
+          {
+            echo "## Aether Launcher APK verification"
+            echo "- Package: `orubus.aether.launcher`"
+            echo "- ZIP integrity: passed"
+            echo "- APK signature verification: passed"
+            echo "- Single universal APK output: passed"
+            echo "- SHA-256:"
+            echo ' ```text'
+            sha256sum "$APK"
+            echo ' ```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Upload raw APK bytes so the browser downloads the installable .apk, not a ZIP wrapper.
+      - name: Publish directly downloadable APK
+        uses: actions/upload-artifact@v7
+        with:
+          path: app/build/outputs/apk/release/app-release.apk
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish SHA-256 checksum
         uses: actions/upload-artifact@v4
         with:
-          name: aether-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: aether-launcher-apk-checksum
+          path: app/build/outputs/apk/release/app-release.apk.sha256
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: app/build/outputs/apk/release/*.apk
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/app-release.apk.sha256
