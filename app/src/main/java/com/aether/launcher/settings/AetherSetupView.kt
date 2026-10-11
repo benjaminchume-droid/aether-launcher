@@ -43,105 +43,14 @@ class AetherSetupView(
     }
 
 
-    private val welcomeArt = object : View(context) {
-        private val artPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private fun color(value: Long) = value.toInt()
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val w = width.toFloat()
-            val h = height.toFloat()
-            if (w <= 0f || h <= 0f) return
-            // Original, scalable painted welcome scene: sunlit alpine valley and a
-            // monumental blue-gold serpent. Drawn natively so it ships with the APK.
-            artPaint.shader = LinearGradient(0f, 0f, w, h, intArrayOf(0xFF0878C5.toInt(), 0xFF62C9F0.toInt(), 0xFFF6C98A.toInt()), null, Shader.TileMode.CLAMP)
-            canvas.drawRect(0f, 0f, w, h, artPaint)
-            artPaint.shader = null
-            artPaint.color = 0xCCFFFFFF.toInt()
-            canvas.drawCircle(w * .78f, h * .52f, w * .13f, artPaint)
-            artPaint.color = 0x55FFFFFF
-            canvas.drawCircle(w * .78f, h * .52f, w * .19f, artPaint)
-            // Cloud banks
-            artPaint.color = 0xDDF7FCFF.toInt()
-            for (i in 0..5) {
-                val x = w * (i / 5f)
-                val y = h * (.19f + (i % 3) * .045f)
-                canvas.drawOval(x - w*.16f, y, x + w*.13f, y + h*.035f, artPaint)
-                canvas.drawCircle(x, y, w*.055f, artPaint)
-            }
-            val ridge = Path().apply {
-                moveTo(0f, h*.61f); lineTo(w*.12f,h*.49f); lineTo(w*.25f,h*.57f)
-                lineTo(w*.42f,h*.43f); lineTo(w*.57f,h*.58f); lineTo(w*.71f,h*.46f)
-                lineTo(w*.86f,h*.56f); lineTo(w,h*.48f); lineTo(w,h); lineTo(0f,h); close()
-            }
-            artPaint.shader = LinearGradient(0f,h*.43f,0f,h,0xFF537D76.toInt(),0xFF102F32.toInt(),Shader.TileMode.CLAMP)
-            canvas.drawPath(ridge, artPaint); artPaint.shader = null
-            // Snowlit distant peaks
-            artPaint.color = 0xFFE6F4F4.toInt()
-            val peaks = Path().apply {
-                moveTo(w*.35f,h*.62f); lineTo(w*.47f,h*.40f); lineTo(w*.53f,h*.49f)
-                lineTo(w*.60f,h*.36f); lineTo(w*.71f,h*.60f); close()
-            }
-            canvas.drawPath(peaks, artPaint)
-            artPaint.color = 0xFF739DA4.toInt()
-            canvas.drawPath(Path().apply {
-                moveTo(w*.47f,h*.40f); lineTo(w*.50f,h*.49f); lineTo(w*.53f,h*.49f); close()
-            }, artPaint)
-            // Valley, lake and waterfalls
-            artPaint.color = 0xFF1B9DB7.toInt()
-            canvas.drawOval(w*.48f,h*.69f,w*.92f,h*.82f,artPaint)
-            artPaint.color = 0x99D6F8FF.toInt()
-            canvas.drawOval(w*.56f,h*.72f,w*.86f,h*.77f,artPaint)
-            artPaint.color = 0xFFB8F1FF.toInt()
-            artPaint.strokeWidth = w*.009f
-            canvas.drawLine(w*.72f,h*.61f,w*.73f,h*.75f,artPaint)
-            canvas.drawLine(w*.82f,h*.63f,w*.83f,h*.75f,artPaint)
-            // The serpent's long, coiled body.
-            val bodyPath = Path().apply {
-                moveTo(-w*.10f,h*.89f)
-                cubicTo(w*.12f,h*.70f,w*.47f,h*.93f,w*.34f,h*.79f)
-                cubicTo(w*.22f,h*.66f,w*.02f,h*.75f,w*.04f,h*.59f)
-                cubicTo(w*.06f,h*.46f,w*.10f,h*.35f,w*.19f,h*.31f)
-            }
-            artPaint.style = Paint.Style.STROKE
-            artPaint.strokeWidth = w*.105f
-            artPaint.strokeCap = Paint.Cap.ROUND
-            artPaint.strokeJoin = Paint.Join.ROUND
-            artPaint.color = 0xFF071A31.toInt()
-            canvas.drawPath(bodyPath, artPaint)
-            artPaint.strokeWidth = w*.079f
-            artPaint.shader = LinearGradient(0f,h*.3f,w*.38f,h*.85f, intArrayOf(0xFF183D66.toInt(),0xFF286D91.toInt(),0xFF102943.toInt()), null, Shader.TileMode.CLAMP)
-            canvas.drawPath(bodyPath, artPaint); artPaint.shader = null
-            // Scale highlights following the curve make the body read as plated metal.
-            artPaint.strokeWidth = w*.006f
-            artPaint.color = 0xA8E3C16C.toInt()
-            for (i in 0..25) {
-                val x = w * (.02f + (i%7)*.045f)
-                val y = h * (.83f - (i/7)*.075f + kotlin.math.sin(i.toDouble()).toFloat()*.012f)
-                canvas.drawArc(x,y,x+w*.035f,y+h*.026f,190f,160f,false,artPaint)
-            }
-            artPaint.style = Paint.Style.FILL
-            // Raised serpent head and amber eye
-            artPaint.color = 0xFF0A2039.toInt()
-            canvas.drawOval(w*.105f,h*.275f,w*.32f,h*.355f,artPaint)
-            artPaint.shader = LinearGradient(w*.13f,h*.28f,w*.29f,h*.35f,0xFF327DA1.toInt(),0xFF10233D.toInt(),Shader.TileMode.CLAMP)
-            canvas.drawOval(w*.12f,h*.28f,w*.31f,h*.35f,artPaint); artPaint.shader = null
-            artPaint.color = 0xFFFFC75A.toInt()
-            canvas.drawCircle(w*.267f,h*.306f,w*.012f,artPaint)
-            artPaint.color = 0xFF101723.toInt()
-            canvas.drawCircle(w*.271f,h*.306f,w*.004f,artPaint)
-            // Atmospheric foreground
-            artPaint.shader = LinearGradient(0f,h*.76f,0f,h,0x00102030,0xCC06121D.toInt(),Shader.TileMode.CLAMP)
-            canvas.drawRect(0f,h*.74f,w,h,artPaint); artPaint.shader = null
-            // Elegant luminous greeting.
-            artPaint.textAlign = Paint.Align.CENTER
-            artPaint.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
-            artPaint.textSize = w*.15f
-            artPaint.setShadowLayer(w*.025f,0f,w*.006f,0xDDFFFFFF.toInt())
-            artPaint.color = 0xF5FFFFFF.toInt()
-            canvas.drawText("Hello", w*.57f, h*.445f, artPaint)
-            artPaint.clearShadowLayer()
-        }
-    }.apply { visibility = View.GONE }
+    private val welcomeArt = ImageView(context).apply {
+        // The original artwork is shipped as a real drawable resource, not redrawn
+        // approximately in Canvas. CENTER_CROP adapts it to portrait phone screens.
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        setImageResource(com.aether.launcher.R.drawable.aether_welcome)
+        contentDescription = "Aether Launcher welcome artwork"
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
 
     private val body = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -210,38 +119,25 @@ class AetherSetupView(
     }
 
     private fun hello() {
-        body.addView(View(context), lp(-1, 100))
-        body.addView(TextView(context).apply {
-            text = "hello"
-            textSize = 58f
-            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setShadowLayer(28f, 0f, 8f, 0xAA000000.toInt())
-        }, lp(-1, 90))
+        // The uploaded welcome artwork already provides the visual greeting.
+        // Keep the onboarding controls below it without duplicating the greeting.
+        body.addView(View(context), lp(-1, dp(390)))
         body.addView(TextView(context).apply {
             text = "Welcome to Aether"
-            textSize = 17f
+            textSize = 16f
             setTextColor(0xF0FFFFFF.toInt())
             gravity = Gravity.CENTER
             setShadowLayer(10f, 0f, 2f, 0x88000000.toInt())
-        }, lp(-1, 36))
-        body.addView(View(context), lp(-1, 36))
+        }, lp(-1, 34))
         body.addView(TextView(context).apply {
-            text = "A calm, fluid workspace built around your wallpaper,\nyour apps, and the way you move between them."
-            textSize = 14f
+            text = "A calm, fluid workspace built around your wallpaper, your apps, and the way you move between them."
+            textSize = 13f
             setTextColor(0xE0FFFFFF.toInt())
             gravity = Gravity.CENTER
-            setLineSpacing(5f, 1f)
+            setLineSpacing(4f, 1f)
+            setPadding(dp(12), 0, dp(12), 0)
             setShadowLayer(8f, 0f, 1f, 0x66000000.toInt())
-        }, lp(-1, 70))
-        body.addView(View(context), lp(-1, 24))
-        body.addView(TextView(context).apply {
-            text = "Swipe up or tap Continue"
-            textSize = 13f
-            setTextColor(0xCCFFFFFF.toInt())
-            gravity = Gravity.CENTER
-        }, lp(-1, 40))
+        }, lp(-1, 54))
     }
 
     private fun homeChoice() {
