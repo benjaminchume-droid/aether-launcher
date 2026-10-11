@@ -45,8 +45,17 @@ class AetherSetupView(
     private val welcomeArt = ImageView(context).apply {
         // Full-bleed welcome artwork (the "Hello" landscape + serpent).
         // CENTER_CROP adapts it cleanly to any portrait phone.
+        // Safe load: never crash the build/runtime if the drawable is missing.
         scaleType = ImageView.ScaleType.CENTER_CROP
-        setImageResource(com.aether.launcher.R.drawable.aether_welcome)
+        val art = runCatching {
+            context.getDrawable(com.aether.launcher.R.drawable.aether_welcome)
+        }.getOrNull()
+        if (art != null) {
+            setImageDrawable(art)
+        } else {
+            // Soft dark gradient fallback so the screen still looks intentional
+            setBackgroundColor(0xFF0B1A2A.toInt())
+        }
         contentDescription = "Aether Launcher welcome artwork"
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
@@ -90,7 +99,7 @@ class AetherSetupView(
             5 -> finishPage()
         }
 
-        // Progress dots only on pages after welcome (or keep subtle on 0)
+        // Progress dots only on pages after welcome
         if (page > 0) {
             progress()
         }
@@ -143,7 +152,6 @@ class AetherSetupView(
     private fun hello() {
         // The artwork itself is the greeting ("Hello" is already in the image).
         // No stacked title/subtitle — keep the screen clean and cinematic.
-        // Just enough top padding so status bar doesn't collide.
         body.addView(View(context), lp(-1, dp(12)))
     }
 
