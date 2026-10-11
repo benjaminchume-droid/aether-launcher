@@ -408,16 +408,15 @@ class AetherHomeView(context: Context) : View(context) {
 
     private fun hitIndex(x: Float, y: Float): Int {
         if (cfg.homeMode == HomeMode.DRAWER_ONLY) return -1
-        val cols = cfg.grid.columns.coerceIn(4, 9)
-        val rows = cfg.grid.rows.coerceIn(4, 9)
-        val left = 12f * d
-        val top = 120f * d
-        val bottom = height - 118f * d
+        val cols = 4
+        val left = 22f * d
+        val top = 242f * d
+        val bottom = height - 164f * d
         val cellW = (width - left * 2) / cols
-        val cellH = (bottom - top) / rows
+        val cellH = (bottom - top) / 2f
         if (x < left || x > width - left || y < top || y > bottom) return -1
         val col = ((x - left) / cellW).toInt().coerceIn(0, cols - 1)
-        val row = ((y - top) / cellH).toInt().coerceIn(0, rows - 1)
+        val row = ((y - top) / cellH).toInt().coerceIn(0, 1)
         val idx = page * pageSize() + row * cols + col
         return if (idx in apps.indices) idx else -1
     }
