@@ -90,8 +90,9 @@ class AetherHomeView(context: Context) : View(context) {
     override fun onDraw(c: Canvas) {
         cfg = settings.load()
         syncApps()
-        // NO solid fill — wallpaper shows through
+        // Bundled wallpaper is provided by AetherGlassRoot.
         drawTop(c)
+        drawWidgets(c)
         drawIslandHint(c)
         drawApps(c)
         drawDock(c)
@@ -126,19 +127,59 @@ class AetherHomeView(context: Context) : View(context) {
 
     private fun drawTop(c: Canvas) {
         p.textAlign = Paint.Align.LEFT
-        p.typeface = Typeface.DEFAULT
-        p.textSize = 11f * d
-        p.color = 0xF0FFFFFF.toInt()
-        p.setShadowLayer(8f * d, 0f, 2f * d, 0xCC000000.toInt())
-        c.drawText(
-            SimpleDateFormat("EEE  •  d MMM", Locale.getDefault()).format(Date()).uppercase(),
-            24f * d, 48f * d, p
-        )
         p.typeface = Typeface.DEFAULT_BOLD
-        p.textSize = 36f * d
+        p.textSize = 17f * d
         p.color = Color.WHITE
-        c.drawText(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), 24f * d, 90f * d, p)
+        p.setShadowLayer(7f * d, 0f, 2f * d, 0xAA00142A.toInt())
+        c.drawText(SimpleDateFormat("h:mm", Locale.getDefault()).format(Date()), 26f * d, 42f * d, p)
         p.clearShadowLayer()
+    }
+
+    private fun drawWidgets(c: Canvas) {
+        val left = 22f * d
+        val right = width - 22f * d
+        val gap = 12f * d
+        val top = 62f * d
+        val bigW = (right - left - gap) * 0.54f
+        val sideL = left + bigW + gap
+        val big = RectF(left, top, left + bigW, top + 166f * d)
+        GlassPainter.drawGlass(c, big, 28f * d, 0x775DC7F5.toInt())
+        p.textAlign = Paint.Align.LEFT
+        p.color = 0xF2FFFFFF.toInt()
+        p.textSize = 13f * d
+        c.drawText(SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date()), big.left + 18f * d, big.top + 30f * d, p)
+        p.textSize = 48f * d
+        p.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+        c.drawText(SimpleDateFormat("h:mm", Locale.getDefault()).format(Date()), big.left + 16f * d, big.top + 88f * d, p)
+        p.typeface = Typeface.DEFAULT
+        p.textSize = 14f * d
+        c.drawText("Your day", big.left + 18f * d, big.top + 120f * d, p)
+        p.textSize = 12f * d
+        c.drawText("Tap an app to begin", big.left + 18f * d, big.top + 145f * d, p)
+
+        val sideRight = right
+        val upper = RectF(sideL, top, sideRight, top + 78f * d)
+        GlassPainter.drawGlass(c, upper, 23f * d, 0x775DC7F5.toInt())
+        p.textSize = 22f * d
+        p.textAlign = Paint.Align.CENTER
+        c.drawText("☼", upper.left + 28f * d, upper.centerY() + 8f * d, p)
+        p.textAlign = Paint.Align.LEFT
+        p.textSize = 12f * d
+        c.drawText("Aether", upper.left + 52f * d, upper.top + 30f * d, p)
+        p.textSize = 10f * d
+        c.drawText("Make room to think", upper.left + 52f * d, upper.top + 49f * d, p)
+
+        val brand = RectF(sideL, top + 88f * d, sideRight, top + 166f * d)
+        GlassPainter.drawGlass(c, brand, 23f * d, 0x775DC7F5.toInt())
+        p.textSize = 25f * d
+        p.textAlign = Paint.Align.LEFT
+        c.drawText("∞", brand.left + 16f * d, brand.top + 30f * d, p)
+        p.textSize = 11f * d
+        c.drawText("Bigger dreams.", brand.left + 16f * d, brand.top + 51f * d, p)
+        c.drawText("Same sky.", brand.left + 16f * d, brand.top + 66f * d, p)
+        p.textSize = 8f * d
+        c.drawText("O R U B U S", brand.left + 16f * d, brand.bottom - 8f * d, p)
+        p.textAlign = Paint.Align.CENTER
     }
 
     private fun drawIslandHint(c: Canvas) {
