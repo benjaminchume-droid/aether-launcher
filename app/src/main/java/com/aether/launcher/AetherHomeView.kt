@@ -121,7 +121,7 @@ class AetherHomeView(context: Context) : View(context) {
         page = page.coerceIn(0, max(0, pageCount() - 1))
     }
 
-    private fun pageSize() = cfg.grid.columns.coerceIn(4, 9) * cfg.grid.rows.coerceIn(4, 9)
+    private fun pageSize() = 8
     private fun pageCount() = max(1, (apps.size + pageSize() - 1) / pageSize())
 
     private fun drawTop(c: Canvas) {
