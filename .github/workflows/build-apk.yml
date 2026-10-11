@@ -85,7 +85,7 @@ jobs:
           sha256sum "$APK" | tee "$APK.sha256"
           {
             echo "## Aether Launcher APK verification"
-            echo "- Package: `orubus.aether.launcher`"
+            echo "- Package: orubus.aether.launcher"
             echo "- ZIP integrity: passed"
             echo "- APK signature verification: passed"
             echo "- Single universal APK output: passed"
