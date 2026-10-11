@@ -115,7 +115,6 @@ class AetherAppDrawerView(context: Context) : FrameLayout(context) {
     }
 
     private fun renderGrid() {
-        if (!::grid.isInitializedCompat()) return
         grid.removeAllViews()
         val q = query.text?.toString()?.trim().orEmpty()
         val terms = labels[category]
@@ -195,6 +194,4 @@ class AetherAppDrawerView(context: Context) : FrameLayout(context) {
 
     private fun dp(v: Int) = (v * d).toInt()
 
-    // No framework dependency or fake app inventory: the grid is populated by LauncherEngine.
-    private fun LinearLayout.isInitializedCompat() = true
 }
