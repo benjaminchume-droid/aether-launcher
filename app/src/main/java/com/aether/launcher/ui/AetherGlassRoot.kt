@@ -3,15 +3,13 @@ package com.aether.launcher.ui
 import android.app.Activity
 import android.app.WallpaperManager
 import android.graphics.Color
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.graphics.drawable.ColorDrawable
-import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import android.net.Uri
 import androidx.core.view.WindowCompat
 import com.aether.launcher.AetherRuntime
 
@@ -24,14 +22,20 @@ class AetherGlassRoot(context: android.content.Context) : FrameLayout(context) {
     private val wallpaper = ImageView(context).apply {
         scaleType = ImageView.ScaleType.CENTER_CROP
         alpha = 1f
-        setImageDrawable(
-            runCatching { WallpaperManager.getInstance(context).drawable }
-                .getOrNull()
-        )
-        // If drawable is null, stay transparent so FLAG_SHOW_WALLPAPER shows through
-        if (drawable == null) {
-            setBackgroundColor(Color.TRANSPARENT)
+        val savedWallpaper = context.getSharedPreferences("aether_appearance", Context.MODE_PRIVATE)
+            .getString("wallpaper_uri", null)
+        val selected = savedWallpaper?.let { uri ->
+            runCatching {
+                context.contentResolver.openInputStream(Uri.parse(uri))?.use {
+                    android.graphics.drawable.Drawable.createFromStream(it, null)
+                }
+            }.getOrNull()
         }
+        setImageDrawable(selected ?: runCatching {
+            context.getDrawable(com.aether.launcher.R.drawable.aether_welcome)
+        }.getOrNull() ?: runCatching { WallpaperManager.getInstance(context).drawable }.getOrNull())
+        // The bundled welcome artwork is the default launcher wallpaper. A user-selected
+        // image takes precedence and its persisted URI survives process restarts.
     }
 
     private val atmosphere = View(context).apply {
@@ -43,13 +47,6 @@ class AetherGlassRoot(context: android.content.Context) : FrameLayout(context) {
         setBackgroundColor(Color.TRANSPARENT)
         addView(wallpaper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(atmosphere, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-
-        if (Build.VERSION.SDK_INT >= 31 && wallpaper.drawable != null) {
-            // Soft blur only when we have a drawable layer
-            wallpaper.setRenderEffect(
-                RenderEffect.createBlurEffect(12f, 12f, Shader.TileMode.CLAMP)
-            )
-        }
 
         systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
             View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
