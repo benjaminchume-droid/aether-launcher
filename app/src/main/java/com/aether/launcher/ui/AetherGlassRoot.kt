@@ -2,8 +2,9 @@ package com.aether.launcher.ui
 
 import android.app.Activity
 import android.app.WallpaperManager
+import android.content.Context
+import android.os.Build
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
