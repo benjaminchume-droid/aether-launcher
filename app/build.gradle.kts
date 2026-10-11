@@ -17,7 +17,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.aetherlaucher.glassline"
+        applicationId = "orubus.aether.launcher"
         minSdk = 26
         targetSdk = 35
         versionCode = 10
@@ -39,11 +39,8 @@ android {
         getByName("debug") { isMinifyEnabled = false }
         getByName("release") {
             isMinifyEnabled = false
-            signingConfig = if (releaseSigningReady) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // Release artifacts must use the dedicated release key. Never silently ship a debug-signed APK.
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
