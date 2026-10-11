@@ -2,6 +2,7 @@ package com.aether.launcher
 
 import android.graphics.Color
 import android.os.Bundle
+import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
@@ -35,6 +36,20 @@ class AetherActivity : ComponentActivity() {
         val glass = AetherGlassRoot(this)
         glass.attach(AetherHomeView(this))
         setContentView(glass)
+    }
+
+    @Deprecated("Use the Activity Result API when migrating this launcher entry point")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7412 && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            runCatching {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            getSharedPreferences("aether_appearance", MODE_PRIVATE)
+                .edit().putString("wallpaper_uri", uri.toString()).apply()
+            showHome()
+        }
     }
 
     override fun onResume() {
