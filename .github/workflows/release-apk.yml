@@ -106,13 +106,21 @@ jobs:
           sha256sum "$APK" >> "$GITHUB_STEP_SUMMARY"
           printf '```\n' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Publish verified APK and checksum
+      # Upload the APK as a raw artifact so the browser download is the APK itself,
+      # not a ZIP wrapper that can be mistaken for an installable APK.
+      - name: Publish directly downloadable APK
+        uses: actions/upload-artifact@v7
+        with:
+          path: app/build/outputs/apk/release/app-release.apk
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish SHA-256 checksum
         uses: actions/upload-artifact@v4
         with:
-          name: aether-launcher-universal-apk
-          path: |
-            app/build/outputs/apk/release/app-release.apk
-            app/build/outputs/apk/release/app-release.apk.sha256
+          name: aether-launcher-apk-checksum
+          path: app/build/outputs/apk/release/app-release.apk.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
