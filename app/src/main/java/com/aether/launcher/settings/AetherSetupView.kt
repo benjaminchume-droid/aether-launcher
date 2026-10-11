@@ -42,10 +42,9 @@ class AetherSetupView(
         }
     }
 
-
     private val welcomeArt = ImageView(context).apply {
-        // The original artwork is shipped as a real drawable resource, not redrawn
-        // approximately in Canvas. CENTER_CROP adapts it to portrait phone screens.
+        // Full-bleed welcome artwork (the "Hello" landscape + serpent).
+        // CENTER_CROP adapts it cleanly to any portrait phone.
         scaleType = ImageView.ScaleType.CENTER_CROP
         setImageResource(com.aether.launcher.R.drawable.aether_welcome)
         contentDescription = "Aether Launcher welcome artwork"
@@ -58,11 +57,14 @@ class AetherSetupView(
         setPadding(dp(24), dp(36), dp(24), dp(36))
     }
 
+    // Bottom-right Continue / Enter button (used especially on the welcome page)
+    private var actionButton: TextView? = null
+
     init {
         addView(wallpaper, LayoutParams(-1, -1))
         addView(welcomeArt, LayoutParams(-1, -1))
-        // Light atmosphere only — wallpaper must remain visible
-        addView(View(context).apply { setBackgroundColor(0x4D05070C) }, LayoutParams(-1, -1))
+        // Light atmosphere only — wallpaper / art must remain visible
+        addView(View(context).apply { setBackgroundColor(0x3305070C) }, LayoutParams(-1, -1))
         addView(ScrollView(context).apply {
             isFillViewport = true
             addView(body)
@@ -73,6 +75,11 @@ class AetherSetupView(
     private fun render() {
         welcomeArt.visibility = if (page == 0) View.VISIBLE else View.GONE
         wallpaper.alpha = if (page == 0) 0f else 1f
+
+        // Remove previous floating action if any
+        actionButton?.let { removeView(it) }
+        actionButton = null
+
         body.removeAllViews()
         when (page) {
             0 -> hello()
@@ -82,8 +89,14 @@ class AetherSetupView(
             4 -> systemLayer()
             5 -> finishPage()
         }
-        progress()
-        val action = glassButton(if (page == 5) "Enter Aether" else "Continue") {
+
+        // Progress dots only on pages after welcome (or keep subtle on 0)
+        if (page > 0) {
+            progress()
+        }
+
+        val label = if (page == 5) "Enter Aether" else "Continue"
+        val action = glassButton(label) {
             if (page == 5) {
                 store.save(s.copy(setupComplete = true))
                 onFinished()
@@ -92,9 +105,18 @@ class AetherSetupView(
                 render()
             }
         }
-        body.addView(View(context), lp(-1, 18))
-        body.addView(action, lp(-1, 56))
-        if (page > 0) {
+
+        if (page == 0) {
+            // Bottom-right placement over the artwork
+            val lp = LayoutParams(dp(148), dp(52)).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+                setMargins(0, 0, dp(20), dp(36))
+            }
+            addView(action, lp)
+            actionButton = action
+        } else {
+            body.addView(View(context), lp(-1, 18))
+            body.addView(action, lp(-1, 56))
             body.addView(TextView(context).apply {
                 text = "\u2039  Back"
                 textSize = 15f
@@ -119,25 +141,10 @@ class AetherSetupView(
     }
 
     private fun hello() {
-        // The uploaded welcome artwork already provides the visual greeting.
-        // Keep the onboarding controls below it without duplicating the greeting.
-        body.addView(View(context), lp(-1, dp(390)))
-        body.addView(TextView(context).apply {
-            text = "Welcome to Aether"
-            textSize = 16f
-            setTextColor(0xF0FFFFFF.toInt())
-            gravity = Gravity.CENTER
-            setShadowLayer(10f, 0f, 2f, 0x88000000.toInt())
-        }, lp(-1, 34))
-        body.addView(TextView(context).apply {
-            text = "A calm, fluid workspace built around your wallpaper, your apps, and the way you move between them."
-            textSize = 13f
-            setTextColor(0xE0FFFFFF.toInt())
-            gravity = Gravity.CENTER
-            setLineSpacing(4f, 1f)
-            setPadding(dp(12), 0, dp(12), 0)
-            setShadowLayer(8f, 0f, 1f, 0x66000000.toInt())
-        }, lp(-1, 54))
+        // The artwork itself is the greeting ("Hello" is already in the image).
+        // No stacked title/subtitle — keep the screen clean and cinematic.
+        // Just enough top padding so status bar doesn't collide.
+        body.addView(View(context), lp(-1, dp(12)))
     }
 
     private fun homeChoice() {
