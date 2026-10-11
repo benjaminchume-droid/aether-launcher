@@ -18,13 +18,9 @@ class AetherSurfaceActivity : Activity() {
 
         AetherRuntime.initialize(applicationContext)
         val root = AetherGlassRoot(this)
-        root.attach(
-            AetherSurfaceView(
-                this,
-                intent.getStringExtra("surface") ?: AetherSurface.DRAWER,
-                intent.getStringExtra("folder_id")
-            )
-        )
+        val surface = intent.getStringExtra("surface") ?: AetherSurface.DRAWER
+        val content = if (surface == AetherSurface.DRAWER) AetherAppDrawerView(this) else AetherSurfaceView(this, surface, intent.getStringExtra("folder_id"))
+        root.attach(content)
         setContentView(root)
     }
 }
