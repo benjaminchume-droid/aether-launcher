@@ -55,10 +55,29 @@ class AetherHomeView(context: Context) : View(context) {
     private var longPressFired = false
 
     private val longPress = Runnable {
-        val token = pressed ?: return@Runnable
         longPressFired = true
         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-        showAppMenu(token)
+        val token = pressed
+        if (token != null) showAppMenu(token) else showWallpaperMenu()
+    }
+
+    private fun showWallpaperMenu() {
+        AlertDialog.Builder(context)
+            .setTitle("Personalize Aether")
+            .setItems(arrayOf("Change wallpaper", "App drawer", "Aether settings")) { _, which ->
+                when (which) {
+                    0 -> (context as? android.app.Activity)?.startActivityForResult(
+                        Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "image/*"
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                        }, 7412
+                    )
+                    1 -> open(com.aether.launcher.ui.AetherSurface.DRAWER)
+                    2 -> context.startActivity(Intent(context, com.aether.launcher.settings.AetherSettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+            .show()
     }
 
     init {
@@ -138,14 +157,14 @@ class AetherHomeView(context: Context) : View(context) {
             p.clearShadowLayer()
             return
         }
-        val cols = cfg.grid.columns.coerceIn(4, 9)
-        val rows = cfg.grid.rows.coerceIn(4, 9)
-        val left = 12f * d
-        val top = 120f * d
-        val bottom = height - 118f * d
+        val cols = 4
+        val rows = 2
+        val left = 22f * d
+        val top = 242f * d
+        val bottom = height - 164f * d
         val cellW = (width - left * 2) / cols
         val cellH = (bottom - top) / rows
-        val icon = min(cfg.grid.iconSize * d, min(cellW, cellH) * 0.52f)
+        val icon = min(58f * d, min(cellW, cellH) * 0.48f)
         val start = page * pageSize()
         val slice = apps.drop(start).take(pageSize())
 
@@ -154,7 +173,7 @@ class AetherHomeView(context: Context) : View(context) {
             val col = i % cols
             val row = i / cols
             val cx = left + col * cellW + cellW / 2f
-            val cy = top + row * cellH + cellH * 0.36f
+            val cy = top + row * cellH + cellH * 0.34f
             val s = if (token == pressed) 0.92f else 1f
             drawAppIcon(c, token, cx, cy, icon * s)
             if (cfg.grid.showLabels) {
@@ -183,6 +202,7 @@ class AetherHomeView(context: Context) : View(context) {
     private fun drawAppIcon(c: Canvas, token: String, cx: Float, cy: Float, size: Float) {
         val half = size / 2f
         val r = RectF(cx - half, cy - half, cx + half, cy + half)
+        if (!token.startsWith("folder:")) GlassPainter.drawGlass(c, r, size * 0.28f, 0x6658BDF4.toInt())
         if (token.startsWith("folder:")) {
             GlassPainter.drawGlass(c, r, size * 0.28f, 0xB01A2430.toInt())
             p.color = Color.WHITE
