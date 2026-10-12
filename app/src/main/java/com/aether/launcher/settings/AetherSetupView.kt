@@ -255,16 +255,132 @@ class AetherSetupView(
 
     private fun gridAndLook() {
         title("Grid & look")
-        paragraph("4\u00d74 through 9\u00d79. Icon size, labels, dock and glass depth are all adjustable later.")
-        glassPanel("GRID", "${s.grid.columns}\u00d7${s.grid.rows}  \u2022  icon ${s.grid.iconSize}dp  \u2022  labels ${if (s.grid.showLabels) "on" else "off"}")
-        glassPanel("DOCK", if (s.dock.enabled) "Enabled  \u2022  ${s.dock.appCount} apps" else "Disabled")
-        glassPanel("GLASS", "Opacity ${s.glass.opacity}%  \u2022  blur ${s.glass.blur}  \u2022  depth ${s.glass.depth}")
+        paragraph("4×4 through 9×9. Icon size, labels, dock and glass depth are adjustable later.")
+
+        glassPanel("GRID", "${s.grid.columns}×${s.grid.rows}  •  icon ${s.grid.iconSize}dp  •  labels ${if (s.grid.showLabels) "on" else "off"}").apply {
+            isClickable = true
+            setOnClickListener { showGridOptions() }
+        }
+        glassPanel("DOCK", if (s.dock.enabled) "Enabled  •  ${s.dock.appCount} apps" else "Disabled").apply {
+            isClickable = true
+            setOnClickListener { showDockEditor() }
+        }
+        glassPanel("GLASS", "Opacity ${s.glass.opacity}%  •  blur ${s.glass.blur}  •  depth ${s.glass.depth}").apply {
+            isClickable = true
+            setOnClickListener { showGlassEditor() }
+        }
         stepper("Columns", s.grid.columns, 4, 9) { v ->
             s = s.copy(grid = s.grid.copy(columns = v)); store.save(s); render()
         }
         stepper("Rows", s.grid.rows, 4, 9) { v ->
             s = s.copy(grid = s.grid.copy(rows = v)); store.save(s); render()
         }
+    }
+
+    private fun showGridOptions() {
+        val labels = arrayOf("Show app labels", "Use compact icon spacing")
+        val checked = booleanArrayOf(s.grid.showLabels, s.grid.iconSize <= 56)
+        android.app.AlertDialog.Builder(context)
+            .setTitle("Grid & icons")
+            .setMultiChoiceItems(labels, checked) { _, which, value ->
+                s = if (which == 0) s.copy(grid = s.grid.copy(showLabels = value))
+                    else s.copy(grid = s.grid.copy(iconSize = if (value) 52 else 64))
+                store.save(s)
+            }
+            .setPositiveButton("Done") { _, _ -> render() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showDockEditor() {
+        val apps = AetherRuntime.registry.launcher.apps().sortedBy { it.label.lowercase() }
+        if (apps.isEmpty()) {
+            android.app.AlertDialog.Builder(context).setTitle("Dock apps")
+                .setMessage("No launchable apps were found on this device.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val dockStore = com.aether.launcher.AetherDockStore(context)
+        val existing = dockStore.load().filter { pkg -> apps.any { it.packageName == pkg } }.toMutableList()
+        if (existing.isEmpty()) existing.addAll(apps.shuffled().take(s.dock.appCount.coerceIn(3, 7)).map { it.packageName })
+        val selected = apps.map { it.packageName in existing }.toBooleanArray()
+        val names = apps.map { it.label.toString() }.toTypedArray()
+        val dialog = android.app.AlertDialog.Builder(context)
+            .setTitle("Choose up to ${s.dock.appCount} dock apps")
+            .setMultiChoiceItems(names, selected) { d, which, checked ->
+                val count = selected.count { it }
+                if (checked && count > s.dock.appCount.coerceIn(3, 7)) {
+                    selected[which] = false
+                    (d as? android.app.AlertDialog)?.listView?.setItemChecked(which, false)
+                    Toast.makeText(context, "The dock holds ${s.dock.appCount} apps. Change the app count first.", Toast.LENGTH_SHORT).show()
+                } else selected[which] = checked
+            }
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val chosen = apps.indices.filter { selected[it] }.map { apps[it].packageName }
+                if (chosen.isEmpty()) {
+                    Toast.makeText(context, "Select at least one app.", Toast.LENGTH_SHORT).show()
+                } else {
+                    dockStore.save(chosen)
+                    s = s.copy(dock = s.dock.copy(appCount = chosen.size, enabled = true))
+                    store.save(s)
+                    dialog.dismiss()
+                    render()
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showGlassEditor() {
+        val opacity = SeekBar(context).apply { max = 100; progress = s.glass.opacity }
+        val blur = SeekBar(context).apply { max = 40; progress = s.glass.blur }
+        val depth = SeekBar(context).apply { max = 18; progress = s.glass.depth.coerceIn(0, 18) }
+        val panel = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(8), dp(22), dp(4))
+        }
+        fun addSlider(label: String, bar: SeekBar) {
+            panel.addView(TextView(context).apply { text = "$label: ${bar.progress}"; setTextColor(Color.WHITE); textSize = 14f })
+            bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, value: Int, fromUser: Boolean) {
+                    (panel.getChildAt(panel.indexOfChild(bar) - 1) as? TextView)?.text = "$label: $value"
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            })
+            panel.addView(bar, LinearLayout.LayoutParams(-1, dp(42)))
+        }
+        addSlider("Opacity (%)", opacity)
+        addSlider("Blur", blur)
+        addSlider("Depth", depth)
+        panel.setBackgroundColor(0xDD18283D.toInt())
+        android.app.AlertDialog.Builder(context).setTitle("Liquid glass").setView(panel)
+            .setPositiveButton("Apply") { _, _ ->
+                s = s.copy(glass = s.glass.copy(opacity = opacity.progress.coerceIn(20, 100), blur = blur.progress, depth = depth.progress.coerceIn(2, 18)))
+                store.save(s)
+                applyGlassSettings()
+                render()
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun applyGlassSettings() {
+        if (!AetherRuntime.isInitialized()) return
+        AetherRuntime.registry.glass.update(
+            com.aether.launcher.engine.glass.GlassMaterial(
+                opacity = s.glass.opacity / 100f,
+                blurRadius = s.glass.blur.toFloat(),
+                saturation = s.glass.saturation / 100f,
+                refraction = s.glass.refraction / 100f,
+                elevation = s.glass.depth.toFloat(),
+                highlight = s.glass.highlight / 100f,
+                borderAlpha = s.glass.border / 100f,
+                cornerRadiusDp = s.glass.cornerRadius.toFloat()
+            )
+        )
     }
 
     private fun islandAndQuick() {
