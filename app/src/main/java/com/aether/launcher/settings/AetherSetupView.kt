@@ -452,7 +452,7 @@ class AetherSetupView(
         }, lp(-1, 64))
     }
 
-    private fun glassPanel(head: String, detail: String) {
+    private fun glassPanel(head: String, detail: String): LinearLayout {
         val box = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(14), dp(18), dp(14))
@@ -473,6 +473,7 @@ class AetherSetupView(
             setPadding(0, dp(5), 0, 0)
         })
         body.addView(box, lp(-1, -2).also { it.setMargins(0, dp(6), 0, dp(6)) })
+        return box
     }
 
     private fun option(head: String, detail: String, value: HomeMode) {
