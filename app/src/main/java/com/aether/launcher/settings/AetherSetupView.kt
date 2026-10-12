@@ -1,5 +1,6 @@
 package com.aether.launcher.settings
 
+import android.app.Activity
 import android.app.WallpaperManager
 import android.content.Context
 import android.content.Intent
@@ -125,9 +126,9 @@ class AetherSetupView(
                 gravity = Gravity.CENTER_VERTICAL
             }
             val back = glassButton("\u2190   Back") {
-                // This is the first setup page. Back exits setup without marking it
-                // complete, allowing Android/system navigation to remain available.
-                onFinished()
+                // Return through the hosting activity's normal navigation without
+                // marking setup complete.
+                (context as? Activity)?.onBackPressedDispatcher?.onBackPressed()
             }.apply {
                 textSize = 14f
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
