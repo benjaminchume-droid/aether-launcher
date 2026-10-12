@@ -314,8 +314,8 @@ class AetherSurfaceView(
                     val col = ((e.x - left) / (cell + gap)).toInt()
                     val row = ((e.y - 118f * d) / (76f * d)).toInt()
                     when (row * 2 + col) {
-                        0 -> note()
-                        1 -> Toast.makeText(context, "Allow microphone for voice notes", Toast.LENGTH_SHORT).show()
+                        0 -> context.startActivity(Intent(context, NoteEditorActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        1 -> context.startActivity(Intent(context, VoiceRecorderActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         2 -> calculator()
                         3 -> {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
