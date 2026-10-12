@@ -4,6 +4,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
@@ -55,6 +57,23 @@ class AetherActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        AetherOverlayService.ensureRunning(this)
+        if (!Settings.canDrawOverlays(this)) {
+            val prefs = getSharedPreferences("aether_overlay_setup", MODE_PRIVATE)
+            if (!prefs.getBoolean("permission_prompted", false)) {
+                prefs.edit().putBoolean("permission_prompted", true).apply()
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Keep Quick Space available")
+                    .setMessage("Allow Aether to display over other apps so the floating edge handle can stay available while you use your phone. Android requires you to grant this special access manually.")
+                    .setCancelable(false)
+                    .setPositiveButton("Open permission settings") { _, _ ->
+                        runCatching { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
+                            .onFailure { Toast.makeText(this, "Open Settings and allow Aether Launcher to display over other apps.", Toast.LENGTH_LONG).show() }
+                    }
+                    .setNegativeButton("Not now", null)
+                    .show()
+            }
+        } else {
+            AetherOverlayService.ensureRunning(this)
+        }
     }
 }
