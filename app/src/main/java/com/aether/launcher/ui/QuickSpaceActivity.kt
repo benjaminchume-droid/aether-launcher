@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -19,6 +20,8 @@ class QuickSpaceActivity : Activity() {
     private fun glass(bg:Int=0x99215A85.toInt())=GradientDrawable().apply{setColor(bg);cornerRadius=dp(26).toFloat();setStroke(dp(1),0x88FFFFFF.toInt())}
     private fun text(t:String,size:Float,bold:Boolean=false)=TextView(this).apply{ text=t; textSize=size; setTextColor(Color.WHITE); if(bold) typeface=Typeface.DEFAULT_BOLD }
     override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        window.setBackgroundDrawableResource(android.R.color.transparent)
         window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT
         val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(36),dp(20),dp(20));setBackgroundColor(0x6600132D)}
         val scroll=ScrollView(this); val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
