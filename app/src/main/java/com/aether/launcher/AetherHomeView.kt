@@ -136,6 +136,7 @@ class AetherHomeView(context: Context) : View(context) {
     }
 
     private fun drawWidgets(c: Canvas) {
+        if (cfg.homeMode == HomeMode.DRAWER_ONLY) return
         val left = 22f * d
         val right = width - 22f * d
         val gap = 12f * d
@@ -262,7 +263,7 @@ class AetherHomeView(context: Context) : View(context) {
     }
 
     private fun drawDock(c: Canvas) {
-        if (!cfg.dock.enabled) return
+        if (!cfg.dock.enabled || cfg.homeMode == HomeMode.DRAWER_ONLY) return
         val dockApps = dockStore.load().ifEmpty {
             AetherRuntime.registry.launcher.apps().take(cfg.dock.appCount).map { it.packageName }
         }.take(cfg.dock.appCount.coerceIn(3, 7))
