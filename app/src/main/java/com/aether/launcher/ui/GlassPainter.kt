@@ -61,7 +61,7 @@ object GlassPainter {
         c.drawRoundRect(bounds, radius, radius, paint)
 
         // Top refraction highlight (simulates light bending)
-        val highlightAlpha = (highlight * material.highlight * 255).toInt().coerceIn(0, 180)
+        val highlightAlpha = (highlight * 255).toInt().coerceIn(0, 180)
         paint.shader = LinearGradient(
             0f, bounds.top,
             0f, bounds.top + bounds.height() * 0.55f,
