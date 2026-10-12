@@ -51,8 +51,23 @@ class AetherEdgeOverlay(private val service: AetherOverlayService) {
                 val r = RectF(2f * d, height * 0.35f, width - 2f * d, height * 0.35f + cfg.handleLength * d)
                 GlassPainter.drawPill(c, r, 0xE0181C24.toInt())
             }
+            private var downX = 0f
+            private var downY = 0f
             override fun onTouchEvent(e: MotionEvent): Boolean {
-                if (e.actionMasked == MotionEvent.ACTION_UP) toggle()
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; return true }
+                    MotionEvent.ACTION_UP -> {
+                        val dx = e.rawX - downX
+                        val dy = e.rawY - downY
+                        val inward = if (cfg.edge == QuickEdge.LEFT) dx > dp(18) else dx < -dp(18)
+                        if (inward || kotlin.math.abs(dy) > dp(24) || kotlin.math.abs(dx) < dp(18)) {
+                            service.startActivity(android.content.Intent(service, com.aether.launcher.ui.QuickSpaceActivity::class.java)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                        }
+                        return true
+                    }
+                    MotionEvent.ACTION_CANCEL -> return true
+                }
                 return true
             }
         }
