@@ -64,7 +64,7 @@ class AetherHomeView(context: Context) : View(context) {
     private fun showWallpaperMenu() {
         AlertDialog.Builder(context)
             .setTitle("Personalize Aether")
-            .setItems(arrayOf("Change wallpaper", "App drawer", "Aether settings")) { _, which ->
+            .setItems(if (cfg.homeMode == HomeMode.ALL_APPS) arrayOf("Change wallpaper", "Aether settings") else arrayOf("Change wallpaper", "App drawer", "Aether settings")) { _, which ->
                 when (which) {
                     0 -> (context as? android.app.Activity)?.startActivityForResult(
                         Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -73,7 +73,7 @@ class AetherHomeView(context: Context) : View(context) {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                         }, 7412
                     )
-                    1 -> open(com.aether.launcher.ui.AetherSurface.DRAWER)
+                    1 -> if (cfg.homeMode == HomeMode.ALL_APPS) context.startActivity(Intent(context, com.aether.launcher.settings.AetherSettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) else open(com.aether.launcher.ui.AetherSurface.DRAWER)
                     2 -> context.startActivity(Intent(context, com.aether.launcher.settings.AetherSettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
             }
@@ -330,7 +330,7 @@ class AetherHomeView(context: Context) : View(context) {
                     return true
                 }
                 if (dy < -80f * d && abs(dy) > abs(dx) * 1.2f) {
-                    open(AetherSurface.DRAWER)
+                    if (cfg.homeMode != HomeMode.ALL_APPS) open(AetherSurface.DRAWER)
                     pressed = null
                     invalidate()
                     return true
