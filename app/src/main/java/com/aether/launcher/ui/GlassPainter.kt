@@ -45,21 +45,23 @@ object GlassPainter {
         depth: Float = material().elevation,
         highlight: Float = material().highlight
     ) {
+        val material = material()
         val d = depth.coerceAtLeast(2f)
+        val adjustedBase = Color.argb((Color.alpha(baseColor) * material.opacity).toInt().coerceIn(0, 255), Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))
 
         // Soft shadow / depth
         paint.style = Paint.Style.FILL
-        paint.color = baseColor
+        paint.color = adjustedBase
         paint.setShadowLayer(d * 1.6f, 0f, d * 0.7f, 0x66000000)
         c.drawRoundRect(bounds, radius, radius, paint)
         paint.clearShadowLayer()
 
         // Main body
-        paint.color = baseColor
+        paint.color = adjustedBase
         c.drawRoundRect(bounds, radius, radius, paint)
 
         // Top refraction highlight (simulates light bending)
-        val highlightAlpha = (highlight * 255).toInt().coerceIn(20, 180)
+        val highlightAlpha = (highlight * material.highlight * 255).toInt().coerceIn(0, 180)
         paint.shader = LinearGradient(
             0f, bounds.top,
             0f, bounds.top + bounds.height() * 0.55f,
