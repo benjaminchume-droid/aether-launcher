@@ -116,10 +116,11 @@ class AetherSetupView(
         }
 
         if (page == 0) {
-            // Bottom-right placement over the artwork
-            val lp = LayoutParams(dp(148), dp(52)).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-                setMargins(0, 0, dp(20), dp(36))
+            // Keep the welcome copy and action floating directly over the full-bleed
+            // Aether artwork. The action is centered above the navigation gesture area.
+            val lp = LayoutParams(-1, dp(56)).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                setMargins(dp(28), 0, dp(28), dp(72))
             }
             addView(action, lp)
             actionButton = action
@@ -150,9 +151,26 @@ class AetherSetupView(
     }
 
     private fun hello() {
-        // The artwork itself is the greeting ("Hello" is already in the image).
-        // No stacked title/subtitle — keep the screen clean and cinematic.
-        body.addView(View(context), lp(-1, dp(12)))
+        // Overlay the welcome copy on the artwork, rather than placing it below
+        // the image or hiding it behind the bottom Continue button.
+        body.addView(View(context), lp(-1, (resources.displayMetrics.heightPixels * 0.47f).toInt()))
+        body.addView(TextView(context).apply {
+            text = "Welcome to Aether"
+            textSize = 28f
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setShadowLayer(12f, 0f, 2f, 0xCC000000.toInt())
+        }, lp(-1, dp(42)))
+        body.addView(TextView(context).apply {
+            text = "A calm, fluid workspace built around your wallpaper, your apps, and the way you move."
+            textSize = 15f
+            setTextColor(0xF2FFFFFF.toInt())
+            gravity = Gravity.CENTER
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setPadding(dp(12), 0, dp(12), 0)
+            setShadowLayer(8f, 0f, 2f, 0xCC000000.toInt())
+        }, lp(-1, dp(64)))
     }
 
     private fun homeChoice() {
