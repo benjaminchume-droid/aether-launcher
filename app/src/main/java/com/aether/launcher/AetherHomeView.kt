@@ -122,7 +122,7 @@ class AetherHomeView(context: Context) : View(context) {
         page = page.coerceIn(0, max(0, pageCount() - 1))
     }
 
-    private fun pageSize() = 8
+    private fun pageSize() = (cfg.grid.columns.coerceIn(4, 9) * cfg.grid.rows.coerceIn(4, 9))
     private fun pageCount() = max(1, (apps.size + pageSize() - 1) / pageSize())
 
     private fun drawTop(c: Canvas) {
@@ -199,14 +199,14 @@ class AetherHomeView(context: Context) : View(context) {
             p.clearShadowLayer()
             return
         }
-        val cols = 4
-        val rows = 2
-        val left = 22f * d
+        val cols = cfg.grid.columns.coerceIn(4, 9)
+        val rows = cfg.grid.rows.coerceIn(4, 9)
+        val left = cfg.grid.horizontalPadding * d
         val top = 242f * d
         val bottom = height - 164f * d
         val cellW = (width - left * 2) / cols
         val cellH = (bottom - top) / rows
-        val icon = min(58f * d, min(cellW, cellH) * 0.48f)
+        val icon = min(cfg.grid.iconSize * d, min(cellW, cellH) * 0.62f)
         val start = page * pageSize()
         val slice = apps.drop(start).take(pageSize())
 
@@ -215,7 +215,7 @@ class AetherHomeView(context: Context) : View(context) {
             val col = i % cols
             val row = i / cols
             val cx = left + col * cellW + cellW / 2f
-            val cy = top + row * cellH + cellH * 0.34f
+            val cy = top + row * cellH + min(cellH * 0.34f, icon * 0.55f)
             val s = if (token == pressed) 0.92f else 1f
             drawAppIcon(c, token, cx, cy, icon * s)
             if (cfg.grid.showLabels) {
@@ -264,9 +264,13 @@ class AetherHomeView(context: Context) : View(context) {
 
     private fun drawDock(c: Canvas) {
         if (!cfg.dock.enabled || cfg.homeMode == HomeMode.DRAWER_ONLY) return
-        val dockApps = dockStore.load().ifEmpty {
-            AetherRuntime.registry.launcher.apps().take(cfg.dock.appCount).map { it.packageName }
-        }.take(cfg.dock.appCount.coerceIn(3, 7))
+        val available = AetherRuntime.registry.launcher.apps().map { it.packageName }
+        var savedDock = dockStore.load().filter { it in available }
+        if (savedDock.isEmpty()) {
+            savedDock = available.shuffled().take(cfg.dock.appCount.coerceIn(3, 7))
+            dockStore.save(savedDock)
+        }
+        val dockApps = savedDock.take(cfg.dock.appCount.coerceIn(1, 7))
         val h = cfg.dock.height * d
         val pad = cfg.dock.bottomPadding * d
         val r = RectF(16f * d, height - h - pad, width - 16f * d, height - pad)
@@ -450,15 +454,16 @@ class AetherHomeView(context: Context) : View(context) {
 
     private fun hitIndex(x: Float, y: Float): Int {
         if (cfg.homeMode == HomeMode.DRAWER_ONLY) return -1
-        val cols = 4
-        val left = 22f * d
+        val cols = cfg.grid.columns.coerceIn(4, 9)
+        val rows = cfg.grid.rows.coerceIn(4, 9)
+        val left = cfg.grid.horizontalPadding * d
         val top = 242f * d
         val bottom = height - 164f * d
         val cellW = (width - left * 2) / cols
-        val cellH = (bottom - top) / 2f
+        val cellH = (bottom - top) / rows
         if (x < left || x > width - left || y < top || y > bottom) return -1
         val col = ((x - left) / cellW).toInt().coerceIn(0, cols - 1)
-        val row = ((y - top) / cellH).toInt().coerceIn(0, 1)
+        val row = ((y - top) / cellH).toInt().coerceIn(0, rows - 1)
         val idx = page * pageSize() + row * cols + col
         return if (idx in apps.indices) idx else -1
     }
