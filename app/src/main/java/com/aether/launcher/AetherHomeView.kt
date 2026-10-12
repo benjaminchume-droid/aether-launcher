@@ -90,6 +90,20 @@ class AetherHomeView(context: Context) : View(context) {
     override fun onDraw(c: Canvas) {
         cfg = settings.load()
         syncApps()
+        if (AetherRuntime.isInitialized()) {
+            AetherRuntime.registry.glass.update(
+                com.aether.launcher.engine.glass.GlassMaterial(
+                    opacity = cfg.glass.opacity / 100f,
+                    blurRadius = cfg.glass.blur.toFloat(),
+                    saturation = cfg.glass.saturation / 100f,
+                    refraction = cfg.glass.refraction / 100f,
+                    elevation = cfg.glass.depth.toFloat(),
+                    highlight = cfg.glass.highlight / 100f,
+                    borderAlpha = cfg.glass.border / 100f,
+                    cornerRadiusDp = cfg.glass.cornerRadius.toFloat()
+                )
+            )
+        }
         // Bundled wallpaper is provided by AetherGlassRoot.
         drawTop(c)
         drawWidgets(c)
