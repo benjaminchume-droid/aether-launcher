@@ -128,7 +128,7 @@ class AetherSetupView(
             val back = glassButton("\u2190   Back") {
                 // Return through the hosting activity's normal navigation without
                 // marking setup complete.
-                (context as? Activity)?.onBackPressedDispatcher?.onBackPressed()
+                (context as? Activity)?.onBackPressed()
             }.apply {
                 textSize = 14f
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
