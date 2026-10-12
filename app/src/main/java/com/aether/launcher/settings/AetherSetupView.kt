@@ -246,11 +246,11 @@ class AetherSetupView(
     }
 
     private fun homeChoice() {
-        title("How should Home behave?")
+        title("How should Home work?")
         paragraph("This is the only choice that changes your first interaction. Everything stays editable later.")
-        option("All apps on Home", "Every installed launcher app lives on paged Home.", HomeMode.ALL_APPS)
-        option("Home + App Drawer", "Keep Home clean and open the full library from the drawer.", HomeMode.HOME_AND_DRAWER)
-        option("App Drawer only", "Minimal Home with the library as the primary surface.", HomeMode.DRAWER_ONLY)
+        option("Home screen only", "Keep your apps on Home. App Drawer is disabled.", HomeMode.ALL_APPS)
+        option("Home screen and App Drawer", "Use Home normally and swipe up to open all apps.", HomeMode.HOME_AND_DRAWER)
+        option("App Drawer only", "Keep Home minimal and use the drawer to open your apps.", HomeMode.DRAWER_ONLY)
     }
 
     private fun gridAndLook() {
