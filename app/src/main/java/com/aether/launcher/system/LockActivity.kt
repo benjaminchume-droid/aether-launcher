@@ -54,7 +54,7 @@ class LockActivity : AppCompatActivity() {
             hasPin = AetherRuntime.security.hasPin(),
             onPinEntered = { code -> handlePin(code) },
             onBiometricRequest = { attemptBiometric(appLabel) },
-            onCancel = { finish() }
+            onCancel = { passcodeView.showError() }
         )
         setContentView(passcodeView)
         passcodeView.post { attemptBiometric(appLabel) }
