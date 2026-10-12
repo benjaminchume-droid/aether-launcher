@@ -19,6 +19,7 @@ class AetherOverlayService : Service() {
 
     private var islandOverlay: AetherNotificationIslandOverlay? = null
     private var edgeOverlay: AetherEdgeOverlay? = null
+    private var controlGestureOverlay: AetherControlGestureOverlay? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private val refresher = object : Runnable {
@@ -29,6 +30,9 @@ class AetherOverlayService : Service() {
                 }
                 if (edgeOverlay == null && Settings.canDrawOverlays(this@AetherOverlayService)) {
                     edgeOverlay = AetherEdgeOverlay(this@AetherOverlayService).also { it.show() }
+                }
+                if (controlGestureOverlay == null && Settings.canDrawOverlays(this@AetherOverlayService)) {
+                    controlGestureOverlay = AetherControlGestureOverlay(this@AetherOverlayService).also { it.show() }
                 }
                 islandOverlay?.refresh()
             }
@@ -81,6 +85,7 @@ class AetherOverlayService : Service() {
             if (Settings.canDrawOverlays(this)) {
                 islandOverlay = AetherNotificationIslandOverlay(this).also { it.show() }
                 edgeOverlay = AetherEdgeOverlay(this).also { it.show() }
+                controlGestureOverlay = AetherControlGestureOverlay(this).also { it.show() }
             }
             MediaSessionBridge.start(applicationContext)
             handler.post(refresher)
@@ -92,6 +97,7 @@ class AetherOverlayService : Service() {
             if (Settings.canDrawOverlays(this)) {
                 if (islandOverlay == null) islandOverlay = AetherNotificationIslandOverlay(this).also { it.show() }
                 if (edgeOverlay == null) edgeOverlay = AetherEdgeOverlay(this).also { it.show() }
+                if (controlGestureOverlay == null) controlGestureOverlay = AetherControlGestureOverlay(this).also { it.show() }
                 islandOverlay?.refresh()
             }
         }
@@ -104,8 +110,10 @@ class AetherOverlayService : Service() {
         MediaSessionBridge.stop(applicationContext)
         islandOverlay?.hide()
         edgeOverlay?.hide()
+        controlGestureOverlay?.hide()
         islandOverlay = null
         edgeOverlay = null
+        controlGestureOverlay = null
         super.onDestroy()
     }
 
