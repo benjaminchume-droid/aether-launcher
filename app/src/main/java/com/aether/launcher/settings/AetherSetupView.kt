@@ -116,14 +116,27 @@ class AetherSetupView(
         }
 
         if (page == 0) {
-            // Keep the welcome copy and action floating directly over the full-bleed
-            // Aether artwork. The action is centered above the navigation gesture area.
-            val lp = LayoutParams(-1, dp(56)).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                setMargins(dp(28), 0, dp(28), dp(72))
+            // Welcome page uses the same composed onboarding layout as the reference:
+            // brand at the top, glass information card in the lower-middle, paired
+            // Back/Continue pills near the bottom.
+            body.addView(View(context), lp(-1, dp(8)))
+            val controls = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
             }
-            addView(action, lp)
-            actionButton = action
+            val back = glassButton("\u2190   Back") {
+                // This is the first setup page. Back exits setup without marking it
+                // complete, allowing Android/system navigation to remain available.
+                onFinished()
+            }.apply {
+                textSize = 14f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            }
+            controls.addView(back, LinearLayout.LayoutParams(0, dp(56), 0.82f).also {
+                it.setMargins(0, 0, dp(12), 0)
+            })
+            controls.addView(action, LinearLayout.LayoutParams(0, dp(60), 1.18f))
+            body.addView(controls, lp(-1, dp(64)))
         } else {
             body.addView(View(context), lp(-1, 18))
             body.addView(action, lp(-1, 56))
@@ -151,26 +164,84 @@ class AetherSetupView(
     }
 
     private fun hello() {
-        // Overlay the welcome copy on the artwork, rather than placing it below
-        // the image or hiding it behind the bottom Continue button.
-        body.addView(View(context), lp(-1, (resources.displayMetrics.heightPixels * 0.47f).toInt()))
+        // Match the supplied setup screenshot rather than the earlier centered
+        // title/button layout: compact Aether brand at top, floating glass card
+        // in the lower-middle, progress indicator inside the card, paired actions.
+        body.addView(View(context), lp(-1, dp(12)))
         body.addView(TextView(context).apply {
-            text = "Welcome to Aether"
-            textSize = 28f
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            text = "\u221e"
+            textSize = 82f
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            setTextColor(0xFF83DFFF.toInt())
+            gravity = Gravity.CENTER
+            setShadowLayer(20f, 0f, 0f, 0xAA548DFF.toInt())
+        }, lp(-1, dp(78)))
+        body.addView(TextView(context).apply {
+            text = "A e t h e r"
+            textSize = 27f
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            letterSpacing = 0.08f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setShadowLayer(12f, 0f, 2f, 0xCC000000.toInt())
-        }, lp(-1, dp(42)))
+            setShadowLayer(8f, 0f, 2f, 0xAA000000.toInt())
+        }, lp(-1, dp(38)))
         body.addView(TextView(context).apply {
-            text = "A calm, fluid workspace built around your wallpaper, your apps, and the way you move."
-            textSize = 15f
-            setTextColor(0xF2FFFFFF.toInt())
+            text = "L A U N C H E R"
+            textSize = 10f
+            letterSpacing = 0.20f
+            setTextColor(0xDDEAF8FF.toInt())
             gravity = Gravity.CENTER
-            setLineSpacing(dp(2).toFloat(), 1f)
-            setPadding(dp(12), 0, dp(12), 0)
-            setShadowLayer(8f, 0f, 2f, 0xCC000000.toInt())
-        }, lp(-1, dp(64)))
+        }, lp(-1, dp(24)))
+
+        body.addView(View(context), lp(-1, (resources.displayMetrics.heightPixels * 0.30f).toInt()))
+
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(28), dp(24), dp(28), dp(20))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xAA18283D.toInt(), 0x774E7895.toInt(), 0x99303E57.toInt())
+            ).apply {
+                cornerRadius = dp(42).toFloat()
+                setStroke(dp(1), 0x99B8E8FF.toInt())
+            }
+            elevation = dp(14).toFloat()
+        }
+        card.addView(TextView(context).apply {
+            text = "Welcome to Aether"
+            textSize = 25f
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            setTextColor(0xFFF3F7FF.toInt())
+            setShadowLayer(6f, 0f, 1f, 0x99000000.toInt())
+        }, lp(-1, dp(42)))
+        card.addView(TextView(context).apply {
+            text = "A calm, fluid workspace built around your wallpaper, your apps, and the way you move."
+            textSize = 14f
+            setTextColor(0xE6F1F6FF.toInt())
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(0, dp(4), 0, dp(8))
+            setShadowLayer(4f, 0f, 1f, 0x66000000.toInt())
+        }, lp(-1, dp(58)))
+        val progressRow = LinearLayout(context).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, 0)
+            addView(View(context).apply {
+                background = GradientDrawable().apply {
+                    setColor(0xFF9CEBFF.toInt())
+                    cornerRadius = dp(4).toFloat()
+                }
+            }, LinearLayout.LayoutParams(dp(38), dp(4)).also { it.setMargins(0, 0, dp(12), 0) })
+            for (i in 1..5) addView(View(context).apply {
+                background = GradientDrawable().apply {
+                    setColor(0x66FFFFFF)
+                    cornerRadius = dp(4).toFloat()
+                }
+            }, LinearLayout.LayoutParams(dp(6), dp(6)).also { it.setMargins(dp(4), 0, dp(4), 0) })
+        }
+        card.addView(progressRow, lp(-1, dp(18)))
+        body.addView(card, lp(-1, dp(198)))
+        body.addView(View(context), lp(-1, dp(64)))
     }
 
     private fun homeChoice() {
